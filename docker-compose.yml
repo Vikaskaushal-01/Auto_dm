@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: autodm_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: autodm
+      POSTGRES_PASSWORD: autodm_dev_password
+      POSTGRES_DB: autodm
+    ports:
+      - "5433:5432"
+    volumes:
+      - autodm_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  autodm_postgres_data:
