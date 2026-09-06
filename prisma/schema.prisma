@@ -1,0 +1,973 @@
+// AutoDM — AI Social Automation OS
+// Phase 1 schema: auth, workspaces, Instagram connector data, profile/follower/
+// content analytics, comment->DM automations, CRM leads, link tracking.
+//
+// Forward-compat notes (Phase 2+, intentionally NOT modeled yet):
+// - Flow / FlowNode / FlowEdge will optionally attach to Automation (1:0..1) to
+//   support the future drag-and-drop visual builder, replacing the simple
+//   AutomationTrigger/AutomationAction pair for advanced flows. Purely additive.
+// - Product / Order / Subscription will attach to Workspace and optionally to
+//   Conversion/Lead for the monetization phase. Purely additive.
+// - Multi-channel connectors (WhatsApp, Messenger, YouTube, Telegram, Discord,
+//   TikTok, LinkedIn, X) reuse Platform/SocialAccount/PlatformConnection as-is —
+//   only new Connector implementations are needed, no schema change.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Platform {
+  INSTAGRAM
+  WHATSAPP
+  MESSENGER
+  YOUTUBE
+  TELEGRAM
+  DISCORD
+  TIKTOK
+  LINKEDIN
+  X
+}
+
+enum WorkspacePlan {
+  FREE
+  DEMO
+  CREATOR
+  PRO
+  BUSINESS
+  AGENCY
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  INVITED
+}
+
+enum ConnectionMode {
+  DEMO
+  LIVE
+}
+
+enum AccountStatus {
+  CONNECTED
+  DEMO
+  DISCONNECTED
+  ERROR
+}
+
+enum PostType {
+  REEL
+  IMAGE
+  CAROUSEL
+  STORY
+}
+
+enum AutomationStatus {
+  ACTIVE
+  PAUSED
+  DRAFT
+}
+
+enum AutomationScope {
+  ALL_POSTS
+  SPECIFIC_POSTS
+  FUTURE_POSTS
+}
+
+enum MatchType {
+  EXACT
+  CONTAINS
+  ANY
+}
+
+enum ActionType {
+  PUBLIC_REPLY
+  SEND_DM
+}
+
+enum DmContentType {
+  TEXT
+  LINK
+  BUTTON
+  IMAGE
+  VIDEO
+  FILE
+  PDF
+}
+
+enum RunStatus {
+  TRIGGERED
+  REPLIED
+  DM_SENT
+  DM_DELIVERED
+  DM_FAILED
+  LINK_CLICKED
+  LEAD
+  CONVERTED
+}
+
+enum ContactSource {
+  AUTODM
+  MANUAL
+  IMPORT
+}
+
+enum LeadStatus {
+  NEW
+  ENGAGED
+  QUALIFIED
+  CUSTOMER
+  REPEAT_CUSTOMER
+  LOST
+}
+
+enum ConversionSource {
+  AUTODM
+  MANUAL
+}
+
+enum MetricUnit {
+  COUNT
+  PERCENT
+  CURRENCY
+  SECONDS
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  CLOSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageSenderType {
+  CONTACT
+  BOT
+  AGENT
+}
+
+enum FlowNodeType {
+  TRIGGER
+  MESSAGE
+  IMAGE
+  VIDEO
+  FILE
+  LINK
+  BUTTON
+  QUESTION
+  CONDITION
+  AI
+  DELAY
+  EMAIL_CAPTURE
+  FOLLOW_GATE
+  TAG
+  CRM
+  WEBHOOK
+  API
+  HUMAN_HANDOFF
+  END
+}
+
+enum ProductType {
+  PDF
+  EBOOK
+  TEMPLATE
+  VIDEO
+  AUDIO
+  ZIP
+  COURSE
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+}
+
+// ---------------------------------------------------------------------------
+// Auth / tenancy
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  image        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships           WorkspaceMember[]
+  auditLogs             AuditLog[]
+  assignedConversations Conversation[]
+}
+
+model Workspace {
+  id        String        @id @default(cuid())
+  name      String
+  slug      String        @unique
+  plan      WorkspacePlan @default(DEMO)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  members         WorkspaceMember[]
+  socialAccounts  SocialAccount[]
+  automations     Automation[]
+  contacts        Contact[]
+  tags            Tag[]
+  links           Link[]
+  campaigns       Campaign[]
+  leads           Lead[]
+  conversions     Conversion[]
+  metricSnapshots MetricSnapshot[]
+  webhooks        Webhook[]
+  apiKeys         ApiKey[]
+  auditLogs       AuditLog[]
+  conversations   Conversation[]
+  flows           Flow[]
+  products        Product[]
+  orders          Order[]
+  bioPage         BioPage?
+  subscription    Subscription?
+}
+
+model WorkspaceMember {
+  id           String       @id @default(cuid())
+  workspaceId  String
+  userId       String? // null for an INVITED member who hasn't created an account yet
+  role         MemberRole   @default(MEMBER)
+  invitedEmail String?
+  status       MemberStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+// ---------------------------------------------------------------------------
+// Platform connections
+// ---------------------------------------------------------------------------
+
+model SocialAccount {
+  id                String        @id @default(cuid())
+  workspaceId       String
+  platform          Platform      @default(INSTAGRAM)
+  externalAccountId String
+  username          String
+  displayName       String?
+  avatarUrl         String?
+  status            AccountStatus @default(DEMO)
+  isDemo            Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connection        PlatformConnection?
+  profile           Profile?
+  followerSnapshots FollowerSnapshot[]
+  posts             Post[]
+  automations       Automation[]
+  contacts          Contact[]
+  metricSnapshots   MetricSnapshot[]
+  conversations     Conversation[]
+
+  @@index([workspaceId, platform])
+}
+
+// OAuth-shaped fields are unused (null) in demo mode. They exist now so wiring
+// real Meta Graph API OAuth later is a logic change, not a migration.
+model PlatformConnection {
+  id                 String         @id @default(cuid())
+  socialAccountId    String         @unique
+  mode               ConnectionMode @default(DEMO)
+  accessToken        String? // encrypted at rest via lib/security/encryption.ts
+  refreshToken       String? // encrypted at rest
+  tokenExpiresAt     DateTime?
+  scopes             String[]
+  metaAppUserId      String?
+  webhookVerifyToken String?
+  lastSyncedAt       DateTime?
+  lastSyncStatus     String?
+  lastErrorMessage   String?
+  // WhatsApp Business Platform messaging limits — unused by other platforms.
+  // Real accounts start at TIER_1 (250 unique customers/24h) and scale up
+  // based on qualityRating (GREEN/YELLOW/RED, driven by block/report rate).
+  messagingTier      String?
+  qualityRating      String?
+  dailyMessageLimit  Int?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+}
+
+model Profile {
+  id               String   @id @default(cuid())
+  socialAccountId  String   @unique
+  followersCount   Int
+  followingCount   Int
+  mediaCount       Int
+  bio              String?
+  website          String?
+  profileVisits30d Int      @default(0)
+  asOf             DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+}
+
+// One row per account per day — powers the follower growth chart directly.
+model FollowerSnapshot {
+  id              String   @id @default(cuid())
+  socialAccountId String
+  snapshotDate    DateTime
+  followersCount  Int
+  followingCount  Int      @default(0)
+  gained          Int      @default(0)
+  lost            Int      @default(0)
+  net             Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([socialAccountId, snapshotDate])
+  @@index([socialAccountId, snapshotDate])
+}
+
+// ---------------------------------------------------------------------------
+// Content
+// ---------------------------------------------------------------------------
+
+model Post {
+  id              String   @id @default(cuid())
+  socialAccountId String
+  externalId      String
+  type            PostType @default(REEL)
+  caption         String?
+  mediaUrl        String?
+  thumbnailUrl    String?
+  permalink       String?
+  publishedAt     DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  socialAccount     SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  contentMetrics    ContentMetric[]
+  comments          Comment[]
+  automationTargets AutomationTargetPost[]
+  links             Link[]
+  metricSnapshots   MetricSnapshot[]
+
+  @@index([socialAccountId, publishedAt])
+  @@index([socialAccountId, type])
+}
+
+// Daily-granularity per-post metrics; aggregated by period in the analytics layer.
+model ContentMetric {
+  id               String   @id @default(cuid())
+  postId           String
+  metricDate       DateTime
+  views            Int      @default(0)
+  reach            Int      @default(0)
+  impressions      Int      @default(0)
+  likes            Int      @default(0)
+  comments         Int      @default(0)
+  shares           Int      @default(0)
+  saves            Int      @default(0)
+  watchTimeSeconds Int      @default(0)
+  engagementRate   Float    @default(0)
+  profileVisits    Int      @default(0)
+  followersGained  Int      @default(0)
+  linkClicks       Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, metricDate])
+  @@index([postId, metricDate])
+}
+
+model Comment {
+  id                    String   @id @default(cuid())
+  postId                String
+  externalId            String
+  authorUsername        String
+  text                  String
+  createdAtPlatform     DateTime
+  isFromAutomationReply Boolean  @default(false)
+  matchedAutomationId   String?
+  createdAt             DateTime @default(now())
+
+  post              Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  matchedAutomation Automation?     @relation(fields: [matchedAutomationId], references: [id], onDelete: SetNull)
+  automationRuns    AutomationRun[]
+
+  @@index([postId, createdAtPlatform])
+  @@index([matchedAutomationId])
+}
+
+// ---------------------------------------------------------------------------
+// Automations (comment -> DM)
+// ---------------------------------------------------------------------------
+
+model Automation {
+  id              String           @id @default(cuid())
+  workspaceId     String
+  socialAccountId String
+  name            String
+  status          AutomationStatus @default(DRAFT)
+  scope           AutomationScope  @default(ALL_POSTS)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  targetPosts     AutomationTargetPost[]
+  triggers        AutomationTrigger[]
+  actions         AutomationAction[]
+  runs            AutomationRun[]
+  matchedComments Comment[]
+  links           Link[]
+  leads           Lead[]
+  conversions     Conversion[]
+  metricSnapshots MetricSnapshot[]
+  flow            Flow?
+
+  @@index([workspaceId, status])
+}
+
+model AutomationTargetPost {
+  id           String @id @default(cuid())
+  automationId String
+  postId       String
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  post       Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, postId])
+}
+
+model AutomationTrigger {
+  id            String    @id @default(cuid())
+  automationId  String
+  keywordGroup  String[] // e.g. ["price","cost","how much"] — any match in group triggers
+  matchType     MatchType @default(CONTAINS)
+  caseSensitive Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
+}
+
+model AutomationAction {
+  id                    String         @id @default(cuid())
+  automationId          String
+  order                 Int
+  type                  ActionType
+  publicReplyVariations String[] // randomly selected at runtime
+  dmContentType         DmContentType?
+  dmBody                String? // supports {{first_name}} etc. tokens
+  dmMediaUrl            String?
+  linkId                String?
+  requiresEmailCapture  Boolean        @default(false)
+  requiresFollow        Boolean        @default(false)
+  tagIdsToApply         String[]
+  createdAt             DateTime       @default(now())
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  link       Link?      @relation(fields: [linkId], references: [id], onDelete: SetNull)
+
+  @@index([automationId, order])
+}
+
+// Row-level spine of the comment -> DM -> link -> lead -> conversion chain.
+// Funnel counts are GROUP BY status/date over this table (plus MetricSnapshot
+// rollups for dashboard-speed aggregates).
+model AutomationRun {
+  id                String    @id @default(cuid())
+  automationId      String
+  commentId         String?
+  contactId         String?
+  triggeredAt       DateTime  @default(now())
+  publicReplySentAt DateTime?
+  dmSentAt          DateTime?
+  dmDeliveredAt     DateTime?
+  dmOpenedAt        DateTime?
+  linkClickedAt     DateTime?
+  leadCapturedAt    DateTime?
+  convertedAt       DateTime?
+  revenueCents      Int?
+  status            RunStatus @default(TRIGGERED)
+  createdAt         DateTime  @default(now())
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  comment    Comment?   @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  contact    Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([automationId, status])
+  @@index([automationId, triggeredAt])
+}
+
+// ---------------------------------------------------------------------------
+// CRM
+// ---------------------------------------------------------------------------
+
+model Contact {
+  id               String        @id @default(cuid())
+  workspaceId      String
+  socialAccountId  String?
+  platformUsername String?
+  email            String?
+  firstName        String?
+  lastName         String?
+  phone            String?
+  source           ContactSource @default(AUTODM)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  socialAccount  SocialAccount?  @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+  tags           ContactTag[]
+  leads          Lead[]
+  automationRuns AutomationRun[]
+  linkClicks     LinkClick[]
+  conversations  Conversation[]
+  orders         Order[]
+
+  @@index([workspaceId, email])
+}
+
+model ContactTag {
+  id        String @id @default(cuid())
+  contactId String
+  tagId     String
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, tagId])
+}
+
+model Tag {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String   @default("#6366f1")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts  ContactTag[]
+
+  @@unique([workspaceId, name])
+}
+
+model Lead {
+  id           String     @id @default(cuid())
+  workspaceId  String
+  contactId    String
+  automationId String?
+  sourceLinkId String?
+  capturedAt   DateTime   @default(now())
+  status       LeadStatus @default(NEW)
+  createdAt    DateTime   @default(now())
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  automation  Automation?  @relation(fields: [automationId], references: [id], onDelete: SetNull)
+  sourceLink  Link?        @relation(fields: [sourceLinkId], references: [id], onDelete: SetNull)
+  conversions Conversion[]
+
+  // Covers the CRM pipeline board's per-stage query (workspaceId + status
+  // equality, capturedAt DESC) as an index-only ordered scan instead of a
+  // sort step — this is the hottest read path on the Lead table.
+  @@index([workspaceId, status, capturedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Links / attribution
+// ---------------------------------------------------------------------------
+
+model Link {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  campaignId     String?
+  automationId   String?
+  postId         String?
+  label          String
+  destinationUrl String
+  shortSlug      String   @unique
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  utmContent     String?
+  utmTerm        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign    Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  automation  Automation?        @relation(fields: [automationId], references: [id], onDelete: SetNull)
+  post        Post?              @relation(fields: [postId], references: [id], onDelete: SetNull)
+  actions     AutomationAction[]
+  clicks      LinkClick[]
+  leads       Lead[]
+  conversions Conversion[]
+
+  @@index([workspaceId])
+}
+
+model LinkClick {
+  id                 String   @id @default(cuid())
+  linkId             String
+  contactId          String?
+  ipHash             String?
+  userAgent          String?
+  referrer           String?
+  country            String?
+  isUniqueForContact Boolean  @default(true)
+  clickedAt          DateTime @default(now())
+
+  link    Link     @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([linkId, clickedAt])
+}
+
+model Campaign {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  links           Link[]
+  metricSnapshots MetricSnapshot[]
+}
+
+// Kept generic now; Phase 2 Product/Order/Subscription tables will optionally
+// FK into this rather than replacing it.
+model Conversion {
+  id           String           @id @default(cuid())
+  workspaceId  String
+  leadId       String
+  automationId String?
+  linkId       String?
+  amountCents  Int
+  currency     String           @default("INR")
+  occurredAt   DateTime         @default(now())
+  source       ConversionSource @default(AUTODM)
+  createdAt    DateTime         @default(now())
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead       Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  automation Automation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
+  link       Link?       @relation(fields: [linkId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, occurredAt])
+}
+
+// ---------------------------------------------------------------------------
+// Generic metric snapshot — catch-all for dashboard/AutoDM-funnel/revenue
+// metrics that don't need a dedicated high-volume table. Every metric stored
+// here (or derived from FollowerSnapshot/ContentMetric) can produce
+// {current, previous, absoluteChange, percentageChange, trend} via
+// lib/analytics/metrics.ts.
+// ---------------------------------------------------------------------------
+
+model MetricSnapshot {
+  id           String     @id @default(cuid())
+  workspaceId  String
+  metricName   String // e.g. "profile_visits","website_clicks","engagement_rate","autodm_dms_sent","autodm_revenue"
+  value        Float
+  unit         MetricUnit @default(COUNT)
+  timestamp    DateTime // daily granularity, 00:00 UTC bucket
+  platform     Platform   @default(INSTAGRAM)
+  accountId    String?
+  contentId    String?
+  campaignId   String?
+  automationId String?
+  createdAt    DateTime   @default(now())
+
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account    SocialAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  content    Post?          @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  campaign   Campaign?      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  automation Automation?    @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, metricName, timestamp])
+  @@index([accountId, metricName, timestamp])
+  @@index([automationId, metricName, timestamp])
+}
+
+// ---------------------------------------------------------------------------
+// Platform / developer
+// ---------------------------------------------------------------------------
+
+model Webhook {
+  id          String   @id @default(cuid())
+  workspaceId String
+  url         String
+  eventTypes  String[]
+  secret      String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  hashedKey   String
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String?
+  action      String
+  entityType  String
+  entityId    String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Unified inbox
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id               String             @id @default(cuid())
+  workspaceId      String
+  socialAccountId  String
+  contactId        String?
+  platform         Platform
+  status           ConversationStatus @default(OPEN)
+  botPaused        Boolean            @default(false)
+  assignedToUserId String?
+  lastMessageAt    DateTime           @default(now())
+  // WhatsApp's 24-hour customer-service window: free-form replies are only
+  // allowed within 24h of the customer's last inbound message; outside it,
+  // only pre-approved template messages can be sent. Tracked here (rather
+  // than derived by scanning Messages each time) so connectors can check it
+  // with a single field read.
+  lastInboundAt    DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  contact       Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assignedTo    User?         @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  messages      Message[]
+
+  @@index([workspaceId, status])
+  // Covers the Inbox's default "All" view (no platform/status filter),
+  // ordered by lastMessageAt DESC, as an index-only ordered scan.
+  @@index([workspaceId, lastMessageAt])
+  @@index([socialAccountId, lastMessageAt])
+}
+
+model Message {
+  id             String            @id @default(cuid())
+  conversationId String
+  direction      MessageDirection
+  senderType     MessageSenderType
+  body           String
+  mediaUrl       String?
+  sentAt         DateTime          @default(now())
+  readAt         DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, sentAt])
+}
+
+// ---------------------------------------------------------------------------
+// Visual flow builder (Phase 2) — optional replacement for the simple
+// AutomationTrigger/AutomationAction pair. An Automation can own at most one
+// Flow; when present, the flow builder is the source of truth for that
+// automation's behavior.
+// ---------------------------------------------------------------------------
+
+model Flow {
+  id           String           @id @default(cuid())
+  workspaceId  String
+  automationId String?          @unique
+  name         String
+  status       AutomationStatus @default(DRAFT)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automation Automation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
+  nodes      FlowNode[]
+  edges      FlowEdge[]
+
+  @@index([workspaceId])
+}
+
+model FlowNode {
+  id        String       @id @default(cuid())
+  flowId    String
+  type      FlowNodeType
+  positionX Float        @default(0)
+  positionY Float        @default(0)
+  data      Json
+
+  flow          Flow       @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  outgoingEdges FlowEdge[] @relation("SourceNode")
+  incomingEdges FlowEdge[] @relation("TargetNode")
+
+  @@index([flowId])
+}
+
+model FlowEdge {
+  id           String  @id @default(cuid())
+  flowId       String
+  sourceNodeId String
+  targetNodeId String
+  sourceHandle String?
+  targetHandle String?
+
+  flow       Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  sourceNode FlowNode @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode FlowNode @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+
+  @@index([flowId])
+}
+
+// ---------------------------------------------------------------------------
+// Monetization
+// ---------------------------------------------------------------------------
+
+model Product {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  name          String
+  description   String?
+  type          ProductType
+  priceCents    Int
+  currency      String      @default("INR")
+  fileUrl       String?
+  coverImageUrl String?
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  orders    Order[]
+
+  @@index([workspaceId, isActive])
+}
+
+// No real payment processing is wired up — orders are created directly in
+// PAID status by a stubbed checkout flow (clearly labeled in the UI). Real
+// Stripe/Razorpay integration would populate a paymentProviderRef and drive
+// status via webhook, without changing this shape.
+model Order {
+  id          String      @id @default(cuid())
+  workspaceId String
+  productId   String
+  contactId   String?
+  email       String
+  amountCents Int
+  currency    String      @default("INR")
+  status      OrderStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  contact   Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status])
+}
+
+model BioPage {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  slug        String   @unique
+  displayName String
+  bio         String?
+  avatarUrl   String?
+  theme       String   @default("default")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  links     BioLink[]
+}
+
+model BioLink {
+  id        String  @id @default(cuid())
+  bioPageId String
+  label     String
+  url       String
+  icon      String?
+  order     Int     @default(0)
+  clicks    Int     @default(0)
+
+  bioPage BioPage @relation(fields: [bioPageId], references: [id], onDelete: Cascade)
+
+  @@index([bioPageId, order])
+}
+
+// No real billing provider is wired up — plan changes here just update
+// Workspace.plan + this row directly. Real Stripe/Razorpay integration would
+// populate a customer/subscription provider ref and drive status via webhook.
+model Subscription {
+  id               String             @id @default(cuid())
+  workspaceId      String             @unique
+  plan             WorkspacePlan
+  status           SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
