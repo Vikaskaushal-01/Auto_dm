@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { DemoFacebookConnector } from "./demo-connector";
 import { GraphAPIFacebookConnector } from "./graph-connector";
 import type { FacebookConnector } from "./types";
@@ -7,7 +7,7 @@ const demoConnector = new DemoFacebookConnector();
 const graphConnector = new GraphAPIFacebookConnector();
 
 export async function getFacebookConnector(socialAccountId: string): Promise<FacebookConnector> {
-  const connection = await prisma.platformConnection.findUnique({
+  const connection = await db.platformConnection.findUnique({
     where: { socialAccountId },
     select: { mode: true },
   });

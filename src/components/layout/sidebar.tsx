@@ -94,9 +94,13 @@ function SectionGroup({ section, pathname }: { section: NavSection; pathname: st
 export function Sidebar({
   mobileOpen = false,
   onCloseMobile,
+  isLive = false,
+  instagramUsername,
 }: {
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
+  isLive?: boolean;
+  instagramUsername?: string;
 }) {
   const pathname = usePathname();
 
@@ -140,10 +144,17 @@ export function Sidebar({
       </nav>
 
       <div className="border-t border-neutral-800 p-3">
-        <div className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-violet-600/20 to-fuchsia-600/20 px-3 py-2.5 text-xs text-violet-200">
-          <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
-          <span>Demo mode — connect Instagram in Settings when ready.</span>
-        </div>
+        {isLive ? (
+          <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2.5 text-xs text-emerald-300">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="truncate font-medium">Live · @{instagramUsername}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-violet-600/20 to-fuchsia-600/20 px-3 py-2.5 text-xs text-violet-200">
+            <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+            <span>Demo mode — connect Instagram in Settings when ready.</span>
+          </div>
+        )}
       </div>
     </>
   );

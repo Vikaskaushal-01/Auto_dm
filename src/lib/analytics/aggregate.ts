@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import type { DateRange } from "./periods";
 
 /**
@@ -15,14 +15,28 @@ import type { DateRange } from "./periods";
  * DB round trip per render.
  */
 const fetchContentMetricRows = cache(async (postId: string, startMs: number, endMs: number) => {
-  return prisma.contentMetric.findMany({
+  const rows = await db.contentMetric.findMany({
     where: { postId, metricDate: { gte: new Date(startMs), lte: new Date(endMs) } },
     orderBy: { metricDate: "asc" },
   });
+  if (rows.length > 0) return rows;
+
+  // Only fallback to latest row if querying the current/recent range.
+  // Never fallback for historical ranges, otherwise previous matches current and deltas become 0.
+  const isCurrentRange = endMs >= Date.now() - 24 * 60 * 60 * 1000;
+  if (isCurrentRange) {
+    return db.contentMetric.findMany({
+      where: { postId },
+      orderBy: { metricDate: "desc" },
+      take: 1,
+    });
+  }
+
+  return [];
 });
 
 const fetchFollowerSnapshotRows = cache(async (accountId: string, startMs: number, endMs: number) => {
-  return prisma.followerSnapshot.findMany({
+  return db.followerSnapshot.findMany({
     where: { socialAccountId: accountId, snapshotDate: { gte: new Date(startMs), lte: new Date(endMs) } },
     orderBy: { snapshotDate: "asc" },
   });
@@ -119,7 +133,7 @@ export async function getMetricValue(
     }
   }
 
-  const rows = await prisma.metricSnapshot.findMany({
+  const rows = await db.metricSnapshot.findMany({
     where: {
       workspaceId: scope.workspaceId,
       metricName,
@@ -174,7 +188,7 @@ export async function getDailySeries(
     }));
   }
 
-  const rows = await prisma.metricSnapshot.findMany({
+  const rows = await db.metricSnapshot.findMany({
     where: {
       workspaceId: scope.workspaceId,
       metricName,

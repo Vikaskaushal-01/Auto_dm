@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { PIPELINE_STAGES, type PipelineStage } from "@/lib/crm-constants";
 
 export { PIPELINE_STAGES, STAGE_LABELS, type PipelineStage } from "@/lib/crm-constants";
@@ -23,13 +23,13 @@ const leadCardInclude = {
 
 export async function getPipelineLeads(workspaceId: string) {
   const [counts, ...stageLeads] = await Promise.all([
-    prisma.lead.groupBy({
+    db.lead.groupBy({
       by: ["status"],
       where: { workspaceId, status: { in: [...PIPELINE_STAGES] } },
       _count: { _all: true },
     }),
     ...PIPELINE_STAGES.map((stage) =>
-      prisma.lead.findMany({
+      db.lead.findMany({
         where: { workspaceId, status: stage },
         include: leadCardInclude,
         orderBy: { capturedAt: "desc" },
@@ -51,7 +51,7 @@ export async function getPipelineLeads(workspaceId: string) {
 }
 
 export async function getLeadDetail(leadId: string, workspaceId: string) {
-  return prisma.lead.findFirst({
+  return db.lead.findFirst({
     where: { id: leadId, workspaceId },
     include: {
       contact: {

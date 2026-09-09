@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { AutoDmDatabase } from "@/lib/db";
 import { addHours, subHours, subMinutes } from "date-fns";
 
 const CONTACT_NAMES = [
@@ -39,13 +39,13 @@ function phoneNumberFor(index: number) {
  * full 90-day AutoDM funnel treatment — that would be a lot of seed time for
  * low marginal value here.
  */
-export async function seedWhatsApp(prisma: PrismaClient, workspaceId: string, rng: () => number) {
-  let socialAccount = await prisma.socialAccount.findFirst({
+export async function seedWhatsApp(db: AutoDmDatabase, workspaceId: string, rng: () => number) {
+  let socialAccount = await db.socialAccount.findFirst({
     where: { workspaceId, platform: "WHATSAPP" },
   });
 
   if (!socialAccount) {
-    socialAccount = await prisma.socialAccount.create({
+    socialAccount = await db.socialAccount.create({
       data: {
         workspaceId,
         platform: "WHATSAPP",
@@ -59,7 +59,7 @@ export async function seedWhatsApp(prisma: PrismaClient, workspaceId: string, rn
     });
   }
 
-  await prisma.platformConnection.upsert({
+  await db.platformConnection.upsert({
     where: { socialAccountId: socialAccount.id },
     update: {},
     create: {
@@ -74,7 +74,7 @@ export async function seedWhatsApp(prisma: PrismaClient, workspaceId: string, rn
     },
   });
 
-  await prisma.profile.upsert({
+  await db.profile.upsert({
     where: { socialAccountId: socialAccount.id },
     update: {},
     create: {
@@ -88,15 +88,15 @@ export async function seedWhatsApp(prisma: PrismaClient, workspaceId: string, rn
   });
 
   // Clean slate for idempotent re-seeding.
-  await prisma.message.deleteMany({ where: { conversation: { socialAccountId: socialAccount.id } } });
-  await prisma.conversation.deleteMany({ where: { socialAccountId: socialAccount.id } });
-  await prisma.contact.deleteMany({ where: { workspaceId, socialAccountId: socialAccount.id } });
+  await db.message.deleteMany({ where: { conversation: { socialAccountId: socialAccount.id } } });
+  await db.conversation.deleteMany({ where: { socialAccountId: socialAccount.id } });
+  await db.contact.deleteMany({ where: { workspaceId, socialAccountId: socialAccount.id } });
 
   const now = new Date();
 
   for (let i = 0; i < CONTACT_NAMES.length; i++) {
     const [firstName, lastName] = CONTACT_NAMES[i].split(" ");
-    const contact = await prisma.contact.create({
+    const contact = await db.contact.create({
       data: {
         workspaceId,
         socialAccountId: socialAccount.id,
@@ -116,7 +116,7 @@ export async function seedWhatsApp(prisma: PrismaClient, workspaceId: string, rn
     const lastInboundAt = subHours(now, hoursAgo);
     const opening = OPENING_MESSAGES[i % OPENING_MESSAGES.length];
 
-    const conversation = await prisma.conversation.create({
+    const conversation = await db.conversation.create({
       data: {
         workspaceId,
         socialAccountId: socialAccount.id,
@@ -128,7 +128,7 @@ export async function seedWhatsApp(prisma: PrismaClient, workspaceId: string, rn
       },
     });
 
-    await prisma.message.create({
+    await db.message.create({
       data: {
         conversationId: conversation.id,
         direction: "INBOUND",
@@ -140,7 +140,7 @@ export async function seedWhatsApp(prisma: PrismaClient, workspaceId: string, rn
 
     if (windowOpen && rng() < 0.7) {
       const replyAt = addHours(lastInboundAt, 0.05);
-      await prisma.message.create({
+      await db.message.create({
         data: {
           conversationId: conversation.id,
           direction: "OUTBOUND",
@@ -149,7 +149,7 @@ export async function seedWhatsApp(prisma: PrismaClient, workspaceId: string, rn
           sentAt: replyAt,
         },
       });
-      await prisma.conversation.update({
+      await db.conversation.update({
         where: { id: conversation.id },
         data: { lastMessageAt: replyAt },
       });

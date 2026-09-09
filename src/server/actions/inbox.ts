@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
 import { getWhatsAppConnector } from "@/lib/connectors/whatsapp";
 
@@ -13,7 +13,7 @@ export async function sendReplyAction(
   if (!trimmed) return { ok: false, error: "Message can't be empty." };
 
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const conversation = await prisma.conversation.findFirst({
+  const conversation = await db.conversation.findFirst({
     where: { id: conversationId, workspaceId },
   });
   if (!conversation) return { ok: false, error: "Conversation not found." };
@@ -30,10 +30,10 @@ export async function sendReplyAction(
     }
   } else {
     const sentAt = new Date();
-    await prisma.message.create({
+    await db.message.create({
       data: { conversationId, direction: "OUTBOUND", senderType: "AGENT", body: trimmed, sentAt },
     });
-    await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: sentAt } });
+    await db.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: sentAt } });
   }
 
   revalidatePath("/inbox");
@@ -42,11 +42,11 @@ export async function sendReplyAction(
 
 export async function toggleBotPauseAction(conversationId: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const conversation = await prisma.conversation.findFirst({
+  const conversation = await db.conversation.findFirst({
     where: { id: conversationId, workspaceId },
   });
   if (!conversation) return;
-  await prisma.conversation.update({
+  await db.conversation.update({
     where: { id: conversationId },
     data: { botPaused: !conversation.botPaused },
   });
@@ -58,7 +58,7 @@ export async function updateConversationStatusAction(
   status: "OPEN" | "PENDING" | "CLOSED",
 ): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  await prisma.conversation.updateMany({
+  await db.conversation.updateMany({
     where: { id: conversationId, workspaceId },
     data: { status },
   });
@@ -67,7 +67,7 @@ export async function updateConversationStatusAction(
 
 export async function assignToMeAction(conversationId: string): Promise<void> {
   const { workspaceId, userId } = await getCurrentWorkspaceContext();
-  await prisma.conversation.updateMany({
+  await db.conversation.updateMany({
     where: { id: conversationId, workspaceId },
     data: { assignedToUserId: userId },
   });
@@ -76,7 +76,7 @@ export async function assignToMeAction(conversationId: string): Promise<void> {
 
 export async function unassignAction(conversationId: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  await prisma.conversation.updateMany({
+  await db.conversation.updateMany({
     where: { id: conversationId, workspaceId },
     data: { assignedToUserId: null },
   });

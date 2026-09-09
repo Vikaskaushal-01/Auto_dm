@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 
 export async function getProducts(workspaceId: string) {
-  return prisma.product.findMany({
+  return db.product.findMany({
     where: { workspaceId },
     include: { _count: { select: { orders: { where: { status: "PAID" } } } } },
     orderBy: { createdAt: "desc" },
@@ -10,12 +10,12 @@ export async function getProducts(workspaceId: string) {
 }
 
 export async function getProductDetail(productId: string, workspaceId: string) {
-  return prisma.product.findFirst({
+  return db.product.findFirst({
     where: { id: productId, workspaceId },
     include: { orders: { orderBy: { createdAt: "desc" }, take: 50 } },
   });
 }
 
 export async function getPublicProduct(productId: string) {
-  return prisma.product.findFirst({ where: { id: productId, isActive: true } });
+  return db.product.findFirst({ where: { id: productId, isActive: true } });
 }

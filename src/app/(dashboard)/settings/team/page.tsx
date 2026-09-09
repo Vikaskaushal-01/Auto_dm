@@ -1,5 +1,5 @@
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { InviteMemberForm } from "@/components/settings/invite-member-form";
 import { RemoveMemberButton } from "@/components/settings/remove-member-button";
 
@@ -11,7 +11,7 @@ const ROLE_STYLES: Record<string, string> = {
 
 export default async function TeamSettingsPage() {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const members = await prisma.workspaceMember.findMany({
+  const members = await db.workspaceMember.findMany({
     where: { workspaceId },
     include: { user: { select: { name: true, email: true } } },
     orderBy: { createdAt: "asc" },

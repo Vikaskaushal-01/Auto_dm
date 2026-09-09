@@ -2,15 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
 import { generateFlowFromPrompt } from "@/lib/flow-generator";
 import { FLOW_NODE_META, type FlowNodeType } from "@/lib/flow-node-types";
-import type { Prisma } from "@/generated/prisma/client";
+import type { InputJsonValue } from "@/types/models";
 
 export async function createFlowAction(name: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const flow = await prisma.flow.create({
+  const flow = await db.flow.create({
     data: {
       workspaceId,
       name: name.trim() || "Untitled Flow",
@@ -21,7 +21,7 @@ export async function createFlowAction(name: string): Promise<void> {
             type: "TRIGGER",
             positionX: 60,
             positionY: 180,
-            data: FLOW_NODE_META.TRIGGER.defaultData as Prisma.InputJsonValue,
+            data: FLOW_NODE_META.TRIGGER.defaultData as InputJsonValue,
           },
         ],
       },
@@ -35,19 +35,19 @@ export async function generateFlowAction(prompt: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
   const generated = generateFlowFromPrompt(prompt);
 
-  const flow = await prisma.flow.create({
+  const flow = await db.flow.create({
     data: { workspaceId, name: generated.name, status: "DRAFT" },
   });
 
   const idMap: Record<string, string> = {};
   for (const node of generated.nodes) {
-    const created = await prisma.flowNode.create({
+    const created = await db.flowNode.create({
       data: {
         flowId: flow.id,
         type: node.type,
         positionX: node.x,
         positionY: node.y,
-        data: node.data as Prisma.InputJsonValue,
+        data: node.data as InputJsonValue,
       },
     });
     idMap[node.tempId] = created.id;
@@ -56,7 +56,7 @@ export async function generateFlowAction(prompt: string): Promise<void> {
     const sourceNodeId = idMap[edge.source];
     const targetNodeId = idMap[edge.target];
     if (!sourceNodeId || !targetNodeId) continue;
-    await prisma.flowEdge.create({ data: { flowId: flow.id, sourceNodeId, targetNodeId } });
+    await db.flowEdge.create({ data: { flowId: flow.id, sourceNodeId, targetNodeId } });
   }
 
   revalidatePath("/flow-builder");
@@ -90,22 +90,22 @@ export async function saveFlowAction(
   input: SaveFlowInput,
 ): Promise<{ ok: boolean; idMap: Record<string, string>; error?: string }> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const flow = await prisma.flow.findFirst({ where: { id: input.flowId, workspaceId } });
+  const flow = await db.flow.findFirst({ where: { id: input.flowId, workspaceId } });
   if (!flow) return { ok: false, idMap: {}, error: "Flow not found" };
 
-  await prisma.flowEdge.deleteMany({ where: { flowId: flow.id } });
-  await prisma.flowNode.deleteMany({ where: { flowId: flow.id } });
-  await prisma.flow.update({ where: { id: flow.id }, data: { name: input.name.trim() || "Untitled Flow", status: input.status } });
+  await db.flowEdge.deleteMany({ where: { flowId: flow.id } });
+  await db.flowNode.deleteMany({ where: { flowId: flow.id } });
+  await db.flow.update({ where: { id: flow.id }, data: { name: input.name.trim() || "Untitled Flow", status: input.status } });
 
   const idMap: Record<string, string> = {};
   for (const node of input.nodes) {
-    const created = await prisma.flowNode.create({
+    const created = await db.flowNode.create({
       data: {
         flowId: flow.id,
         type: node.type,
         positionX: node.x,
         positionY: node.y,
-        data: node.data as Prisma.InputJsonValue,
+        data: node.data as InputJsonValue,
       },
     });
     idMap[node.id] = created.id;
@@ -114,7 +114,7 @@ export async function saveFlowAction(
     const sourceNodeId = idMap[edge.source];
     const targetNodeId = idMap[edge.target];
     if (!sourceNodeId || !targetNodeId) continue;
-    await prisma.flowEdge.create({
+    await db.flowEdge.create({
       data: {
         flowId: flow.id,
         sourceNodeId,
@@ -132,7 +132,7 @@ export async function saveFlowAction(
 
 export async function deleteFlowAction(flowId: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  await prisma.flow.deleteMany({ where: { id: flowId, workspaceId } });
+  await db.flow.deleteMany({ where: { id: flowId, workspaceId } });
   revalidatePath("/flow-builder");
   redirect("/flow-builder");
 }

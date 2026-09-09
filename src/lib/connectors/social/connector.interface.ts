@@ -1,4 +1,4 @@
-import type { Platform } from "@/generated/prisma/enums";
+import type { Platform } from "@/types/models";
 
 /**
  * Thin platform-agnostic marker interface. Not consumed by any UI in

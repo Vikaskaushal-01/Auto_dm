@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { computeMetrics } from "@/lib/analytics/metrics";
 import { resolvePeriod, type PeriodKey } from "@/lib/analytics/periods";
 import { getAutomationFunnel } from "@/lib/analytics/funnel";
@@ -45,7 +45,7 @@ export default async function AutomationPerformancePage({
 
   const { workspaceId, socialAccount } = await getCurrentWorkspaceContext();
 
-  const automation = await prisma.automation.findFirst({
+  const automation = await db.automation.findFirst({
     where: { id, workspaceId },
     include: { triggers: true },
   });
@@ -58,7 +58,7 @@ export default async function AutomationPerformancePage({
   const [metrics, funnel, recentRuns] = await Promise.all([
     computeMetrics(metricKeys, scope, period),
     getAutomationFunnel({ automationId: automation.id }, currentRange),
-    prisma.automationRun.findMany({
+    db.automationRun.findMany({
       where: { automationId: automation.id },
       include: { comment: { select: { authorUsername: true } } },
       orderBy: { triggeredAt: "desc" },

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 
 export async function GET(request: Request, { params }: { params: Promise<{ linkId: string }> }) {
   const { linkId } = await params;
-  const link = await prisma.bioLink
+  const link = await db.bioLink
     .update({
       where: { id: linkId },
       data: { clicks: { increment: 1 } },

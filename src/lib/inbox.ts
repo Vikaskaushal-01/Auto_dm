@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 
 export interface ConversationFilters {
   platform?: "INSTAGRAM" | "MESSENGER" | "WHATSAPP";
@@ -13,7 +13,7 @@ export interface ConversationFilters {
 const CONVERSATION_LIST_LIMIT = 100;
 
 export async function getConversations(workspaceId: string, filters: ConversationFilters = {}) {
-  return prisma.conversation.findMany({
+  return db.conversation.findMany({
     where: {
       workspaceId,
       platform: filters.platform,
@@ -31,7 +31,7 @@ export async function getConversations(workspaceId: string, filters: Conversatio
 }
 
 export async function getConversationDetail(conversationId: string, workspaceId: string) {
-  const conversation = await prisma.conversation.findFirst({
+  const conversation = await db.conversation.findFirst({
     where: { id: conversationId, workspaceId },
     include: {
       contact: true,

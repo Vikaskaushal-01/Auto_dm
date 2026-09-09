@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { TIER_LIMITS } from "./tiers";
 import type {
   ConnectionStatusDTO,
@@ -43,7 +43,7 @@ const DEMO_TEMPLATES: WhatsAppTemplateDTO[] = [
 
 export class DemoWhatsAppConnector implements WhatsAppConnector {
   async getBusinessProfile(accountId: string): Promise<WhatsAppProfileDTO> {
-    const account = await prisma.socialAccount.findUniqueOrThrow({
+    const account = await db.socialAccount.findUniqueOrThrow({
       where: { id: accountId },
       include: { profile: true },
     });
@@ -57,7 +57,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
   }
 
   async getMessagingLimits(accountId: string): Promise<MessagingLimitsDTO> {
-    const connection = await prisma.platformConnection.findUnique({
+    const connection = await db.platformConnection.findUnique({
       where: { socialAccountId: accountId },
     });
     const tier = (connection?.messagingTier ?? "TIER_1") as MessagingTier;
@@ -66,14 +66,14 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
 
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const [messagesSentToday, uniqueCustomersToday] = await Promise.all([
-      prisma.message.count({
+      db.message.count({
         where: {
           direction: "OUTBOUND",
           sentAt: { gte: since24h },
           conversation: { socialAccountId: accountId },
         },
       }),
-      prisma.conversation
+      db.conversation
         .findMany({
           where: { socialAccountId: accountId, lastMessageAt: { gte: since24h } },
           select: { id: true },
@@ -85,7 +85,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
   }
 
   async getConversations(accountId: string): Promise<WhatsAppConversationDTO[]> {
-    const conversations = await prisma.conversation.findMany({
+    const conversations = await db.conversation.findMany({
       where: { socialAccountId: accountId },
       include: {
         contact: { select: { firstName: true, lastName: true, phone: true, platformUsername: true } },
@@ -113,7 +113,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
   }
 
   async getMessages(conversationId: string): Promise<WhatsAppMessageDTO[]> {
-    const messages = await prisma.message.findMany({
+    const messages = await db.message.findMany({
       where: { conversationId },
       orderBy: { sentAt: "asc" },
     });
@@ -127,7 +127,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
   }
 
   async isWindowOpen(conversationId: string): Promise<boolean> {
-    const conversation = await prisma.conversation.findUniqueOrThrow({
+    const conversation = await db.conversation.findUniqueOrThrow({
       where: { id: conversationId },
     });
     if (!conversation.lastInboundAt) return false;
@@ -144,7 +144,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
           "24-hour window closed — this contact hasn't messaged in the last 24h. Send a template message instead.",
       };
     }
-    const message = await prisma.message.create({
+    const message = await db.message.create({
       data: {
         conversationId: input.conversationId,
         direction: "OUTBOUND",
@@ -153,7 +153,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
         mediaUrl: input.mediaUrl,
       },
     });
-    await prisma.conversation.update({
+    await db.conversation.update({
       where: { id: input.conversationId },
       data: { lastMessageAt: message.sentAt },
     });
@@ -172,7 +172,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
     for (const [key, value] of Object.entries(input.variables ?? {})) {
       body = body.replace(`{{${key}}}`, value);
     }
-    const message = await prisma.message.create({
+    const message = await db.message.create({
       data: {
         conversationId: input.conversationId,
         direction: "OUTBOUND",
@@ -180,7 +180,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
         body,
       },
     });
-    await prisma.conversation.update({
+    await db.conversation.update({
       where: { id: input.conversationId },
       data: { lastMessageAt: message.sentAt },
     });
@@ -192,7 +192,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
   }
 
   async verifyConnection(accountId: string): Promise<ConnectionStatusDTO> {
-    const connection = await prisma.platformConnection.findUnique({
+    const connection = await db.platformConnection.findUnique({
       where: { socialAccountId: accountId },
     });
     if (!connection) return { ok: false, error: "No platform connection found" };

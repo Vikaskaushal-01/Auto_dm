@@ -9,6 +9,7 @@ import { formatCompact, formatCount, formatPercent } from "@/lib/analytics/forma
 import { cn } from "@/lib/utils";
 
 const SORT_OPTIONS: { key: keyof ContentSummary; label: string }[] = [
+  { key: "publishedAt", label: "Date Uploaded" },
   { key: "views", label: "Views" },
   { key: "reach", label: "Reach" },
   { key: "likes", label: "Likes" },
@@ -29,13 +30,18 @@ export default async function ContentAnalyticsPage({
   const period = (["today", "7d", "30d", "90d"].includes(periodParam ?? "")
     ? periodParam
     : "30d") as PeriodKey;
-  const sortBy = (SORT_OPTIONS.some((o) => o.key === sortParam) ? sortParam : "views") as keyof ContentSummary;
+  const sortBy = (SORT_OPTIONS.some((o) => o.key === sortParam) ? sortParam : "publishedAt") as keyof ContentSummary;
 
   const { socialAccount } = await getCurrentWorkspaceContext();
   const { current: currentRange } = resolvePeriod(period);
 
   const summaries = await getContentSummaries(socialAccount.id, currentRange);
-  const sorted = [...summaries].sort((a, b) => (b[sortBy] as number) - (a[sortBy] as number));
+  const sorted = [...summaries].sort((a, b) => {
+    if (sortBy === "publishedAt") {
+      return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+    }
+    return (Number(b[sortBy]) || 0) - (Number(a[sortBy]) || 0);
+  });
 
   return (
     <div className="space-y-6">
@@ -43,7 +49,13 @@ export default async function ContentAnalyticsPage({
         <div>
           <h1 className="text-2xl font-semibold text-white">Content</h1>
           <p className="mt-1 text-sm text-neutral-400">
-            Every post and reel for @{socialAccount.username}, sorted by {sortBy === "engagementRate" ? "engagement" : String(sortBy)}.
+            Every post and reel for @{socialAccount.username}, sorted by{" "}
+            {sortBy === "publishedAt"
+              ? "date uploaded (newest first)"
+              : sortBy === "engagementRate"
+                ? "engagement"
+                : String(sortBy)}
+            .
           </p>
         </div>
         <PeriodSelector active={period} basePath="/analytics/content" />
@@ -71,14 +83,94 @@ export default async function ContentAnalyticsPage({
           <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b border-neutral-800 text-left text-xs uppercase tracking-wide text-neutral-500">
-                <th className="px-4 py-3 font-medium">Content</th>
-                <th className="px-3 py-3 font-medium">Views</th>
-                <th className="px-3 py-3 font-medium">Reach</th>
-                <th className="px-3 py-3 font-medium">Likes</th>
-                <th className="px-3 py-3 font-medium">Comments</th>
-                <th className="px-3 py-3 font-medium">Engagement</th>
-                <th className="px-3 py-3 font-medium">Followers</th>
-                <th className="px-3 py-3 font-medium">Link Clicks</th>
+                <th className="px-4 py-3 font-medium">
+                  <Link
+                    href={`/analytics/content?period=${period}&sort=publishedAt`}
+                    className={cn(
+                      "inline-flex items-center gap-1 transition-colors hover:text-white",
+                      sortBy === "publishedAt" && "text-violet-400 font-semibold",
+                    )}
+                  >
+                    Content / Date {sortBy === "publishedAt" && "↓"}
+                  </Link>
+                </th>
+                <th className="px-3 py-3 font-medium">
+                  <Link
+                    href={`/analytics/content?period=${period}&sort=views`}
+                    className={cn(
+                      "inline-flex items-center gap-1 transition-colors hover:text-white",
+                      sortBy === "views" && "text-violet-400 font-semibold",
+                    )}
+                  >
+                    Views {sortBy === "views" && "↓"}
+                  </Link>
+                </th>
+                <th className="px-3 py-3 font-medium">
+                  <Link
+                    href={`/analytics/content?period=${period}&sort=reach`}
+                    className={cn(
+                      "inline-flex items-center gap-1 transition-colors hover:text-white",
+                      sortBy === "reach" && "text-violet-400 font-semibold",
+                    )}
+                  >
+                    Reach {sortBy === "reach" && "↓"}
+                  </Link>
+                </th>
+                <th className="px-3 py-3 font-medium">
+                  <Link
+                    href={`/analytics/content?period=${period}&sort=likes`}
+                    className={cn(
+                      "inline-flex items-center gap-1 transition-colors hover:text-white",
+                      sortBy === "likes" && "text-violet-400 font-semibold",
+                    )}
+                  >
+                    Likes {sortBy === "likes" && "↓"}
+                  </Link>
+                </th>
+                <th className="px-3 py-3 font-medium">
+                  <Link
+                    href={`/analytics/content?period=${period}&sort=comments`}
+                    className={cn(
+                      "inline-flex items-center gap-1 transition-colors hover:text-white",
+                      sortBy === "comments" && "text-violet-400 font-semibold",
+                    )}
+                  >
+                    Comments {sortBy === "comments" && "↓"}
+                  </Link>
+                </th>
+                <th className="px-3 py-3 font-medium">
+                  <Link
+                    href={`/analytics/content?period=${period}&sort=engagementRate`}
+                    className={cn(
+                      "inline-flex items-center gap-1 transition-colors hover:text-white",
+                      sortBy === "engagementRate" && "text-violet-400 font-semibold",
+                    )}
+                  >
+                    Engagement {sortBy === "engagementRate" && "↓"}
+                  </Link>
+                </th>
+                <th className="px-3 py-3 font-medium">
+                  <Link
+                    href={`/analytics/content?period=${period}&sort=followersGained`}
+                    className={cn(
+                      "inline-flex items-center gap-1 transition-colors hover:text-white",
+                      sortBy === "followersGained" && "text-violet-400 font-semibold",
+                    )}
+                  >
+                    Followers {sortBy === "followersGained" && "↓"}
+                  </Link>
+                </th>
+                <th className="px-3 py-3 font-medium">
+                  <Link
+                    href={`/analytics/content?period=${period}&sort=linkClicks`}
+                    className={cn(
+                      "inline-flex items-center gap-1 transition-colors hover:text-white",
+                      sortBy === "linkClicks" && "text-violet-400 font-semibold",
+                    )}
+                  >
+                    Link Clicks {sortBy === "linkClicks" && "↓"}
+                  </Link>
+                </th>
               </tr>
             </thead>
             <tbody>

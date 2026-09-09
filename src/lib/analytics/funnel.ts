@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@/generated/prisma/client";
+import { db } from "@/lib/db";
 import type { DateRange } from "./periods";
+import type { AutomationRunWhereInput } from "@/types/models";
 
 export interface FunnelStage {
   key: string;
@@ -20,21 +20,21 @@ export interface FunnelResult {
  * — callers just supply the right `where` clause.
  */
 export async function getAutomationFunnel(
-  where: Prisma.AutomationRunWhereInput,
+  where: AutomationRunWhereInput,
   range?: DateRange,
 ): Promise<FunnelResult> {
-  const scoped: Prisma.AutomationRunWhereInput = range
+  const scoped: AutomationRunWhereInput = range
     ? { ...where, triggeredAt: { gte: range.start, lte: range.end } }
     : where;
 
   const [matched, sent, delivered, linkClicked, leads, converted, revenue] = await Promise.all([
-    prisma.automationRun.count({ where: scoped }),
-    prisma.automationRun.count({ where: { ...scoped, dmSentAt: { not: null } } }),
-    prisma.automationRun.count({ where: { ...scoped, dmDeliveredAt: { not: null } } }),
-    prisma.automationRun.count({ where: { ...scoped, linkClickedAt: { not: null } } }),
-    prisma.automationRun.count({ where: { ...scoped, leadCapturedAt: { not: null } } }),
-    prisma.automationRun.count({ where: { ...scoped, convertedAt: { not: null } } }),
-    prisma.automationRun.aggregate({
+    db.automationRun.count({ where: scoped }),
+    db.automationRun.count({ where: { ...scoped, dmSentAt: { not: null } } }),
+    db.automationRun.count({ where: { ...scoped, dmDeliveredAt: { not: null } } }),
+    db.automationRun.count({ where: { ...scoped, linkClickedAt: { not: null } } }),
+    db.automationRun.count({ where: { ...scoped, leadCapturedAt: { not: null } } }),
+    db.automationRun.count({ where: { ...scoped, convertedAt: { not: null } } }),
+    db.automationRun.aggregate({
       where: { ...scoped, convertedAt: { not: null } },
       _sum: { revenueCents: true },
     }),
@@ -49,6 +49,6 @@ export async function getAutomationFunnel(
       { key: "leads", label: "Leads", value: leads },
       { key: "converted", label: "Converted", value: converted },
     ],
-    revenueCents: revenue._sum.revenueCents ?? 0,
+    revenueCents: revenue._sum?.revenueCents ?? 0,
   };
 }

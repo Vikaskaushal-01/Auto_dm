@@ -1,10 +1,10 @@
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { WorkspaceNameForm } from "@/components/settings/workspace-name-form";
 
 export default async function WorkspaceSettingsPage() {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+  const workspace = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
 
   return (
     <div className="max-w-2xl space-y-6">

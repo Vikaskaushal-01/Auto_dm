@@ -1,15 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import { seedFollowerHistory } from "../../../prisma/seed/follower-history";
-import { seedContent } from "../../../prisma/seed/content";
-import { seedAutomations } from "../../../prisma/seed/automations";
-import { seedFunnel } from "../../../prisma/seed/funnel";
-import { seedWhatsApp } from "../../../prisma/seed/whatsapp";
-import { seedFacebook } from "../../../prisma/seed/facebook";
-import { mulberry32 } from "../../../prisma/seed/constants";
+import { seedFollowerHistory } from "@/db/seed/follower-history";
+import { seedContent } from "@/db/seed/content";
+import { seedAutomations } from "@/db/seed/automations";
+import { seedFunnel } from "@/db/seed/funnel";
+import { seedWhatsApp } from "@/db/seed/whatsapp";
+import { seedFacebook } from "@/db/seed/facebook";
+import { mulberry32 } from "@/db/seed/constants";
 
 /**
  * Regenerates this workspace's demo dataset (follower history, content,
@@ -30,11 +30,11 @@ export async function regenerateDemoDataAction(): Promise<{ ok: boolean }> {
 
   void (async () => {
     try {
-      await seedFollowerHistory(prisma, workspaceId, socialAccount.id, rng);
-      const posts = await seedContent(prisma, socialAccount.id, rng);
+      await seedFollowerHistory(db, workspaceId, socialAccount.id, rng);
+      const posts = await seedContent(db, socialAccount.id, rng);
       const postIdByIndex = new Map(posts.map((p) => [p.index, p.id]));
-      const automationsByKey = await seedAutomations(prisma, workspaceId, socialAccount.id, postIdByIndex);
-      await seedFunnel(prisma, workspaceId, socialAccount.id, postIdByIndex, automationsByKey, rng);
+      const automationsByKey = await seedAutomations(db, workspaceId, socialAccount.id, postIdByIndex);
+      await seedFunnel(db, workspaceId, socialAccount.id, postIdByIndex, automationsByKey, rng);
       console.log(`Demo data regenerated for workspace ${workspaceId}`);
     } catch (err) {
       console.error(`Demo data regeneration failed for workspace ${workspaceId}:`, err);
@@ -58,9 +58,9 @@ export async function connectPlatformAction(
 
   try {
     if (platform === "WHATSAPP") {
-      await seedWhatsApp(prisma, workspaceId, rng);
+      await seedWhatsApp(db, workspaceId, rng);
     } else {
-      await seedFacebook(prisma, workspaceId, rng);
+      await seedFacebook(db, workspaceId, rng);
     }
   } catch (err) {
     console.error(`Failed to connect ${platform} demo account:`, err);
@@ -78,7 +78,7 @@ export async function updateWorkspaceNameAction(name: string): Promise<{ ok: boo
     return { ok: false, error: "Workspace name must be at least 2 characters." };
   }
   const { workspaceId } = await getCurrentWorkspaceContext();
-  await prisma.workspace.update({ where: { id: workspaceId }, data: { name: trimmed } });
+  await db.workspace.update({ where: { id: workspaceId }, data: { name: trimmed } });
   revalidatePath("/settings/workspace");
   return { ok: true };
 }
@@ -90,22 +90,22 @@ export async function inviteTeamMemberAction(email: string): Promise<{ ok: boole
   }
   const { workspaceId } = await getCurrentWorkspaceContext();
 
-  const existingUser = await prisma.user.findUnique({ where: { email: trimmed } });
+  const existingUser = await db.user.findUnique({ where: { email: trimmed } });
   if (existingUser) {
-    const alreadyMember = await prisma.workspaceMember.findUnique({
+    const alreadyMember = await db.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId: existingUser.id } },
     });
     if (alreadyMember) {
       return { ok: false, error: "This person is already on the team." };
     }
-    await prisma.workspaceMember.create({
+    await db.workspaceMember.create({
       data: { workspaceId, userId: existingUser.id, role: "MEMBER", status: "ACTIVE" },
     });
   } else {
     // Real email delivery isn't wired up in Phase 1 — the invite is recorded
     // (invitedEmail, userId null since they have no account yet) so it shows
     // in the team list, but no email is sent.
-    await prisma.workspaceMember.create({
+    await db.workspaceMember.create({
       data: { workspaceId, role: "MEMBER", status: "INVITED", invitedEmail: trimmed },
     });
   }
@@ -116,6 +116,31 @@ export async function inviteTeamMemberAction(email: string): Promise<{ ok: boole
 
 export async function removeTeamMemberAction(memberId: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  await prisma.workspaceMember.deleteMany({ where: { id: memberId, workspaceId } });
+  await db.workspaceMember.deleteMany({ where: { id: memberId, workspaceId } });
   revalidatePath("/settings/team");
 }
+
+export async function togglePlatformModeAction(
+  socialAccountId: string,
+): Promise<{ ok: boolean; mode?: "LIVE" | "DEMO"; error?: string }> {
+  const { workspaceId } = await getCurrentWorkspaceContext();
+  const account = await db.socialAccount.findFirst({
+    where: { id: socialAccountId, workspaceId },
+    include: { connection: true },
+  });
+  if (!account || !account.connection) {
+    return { ok: false, error: "Account or connection not found" };
+  }
+
+  const newMode = account.connection.mode === "LIVE" ? "DEMO" : "LIVE";
+  await db.platformConnection.update({
+    where: { id: account.connection.id },
+    data: { mode: newMode, updatedAt: new Date() },
+  });
+
+  revalidatePath("/settings/integrations");
+  revalidatePath("/analytics/profile");
+  revalidatePath("/dashboard");
+  return { ok: true, mode: newMode };
+}
+
