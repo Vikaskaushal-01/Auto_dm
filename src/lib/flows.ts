@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 
 export async function getFlows(workspaceId: string) {
-  return prisma.flow.findMany({
+  return db.flow.findMany({
     where: { workspaceId },
     include: {
       automation: { select: { name: true } },
@@ -13,7 +13,7 @@ export async function getFlows(workspaceId: string) {
 }
 
 export async function getFlowDetail(flowId: string, workspaceId: string) {
-  return prisma.flow.findFirst({
+  return db.flow.findFirst({
     where: { id: flowId, workspaceId },
     include: {
       nodes: true,

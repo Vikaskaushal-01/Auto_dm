@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { AutoDmDatabase } from "@/lib/db";
 import { buildScaledDailySeries, dateForIndex, last90in30DaySegments, NUM_DAYS } from "./series";
 
 // Headline targets mirror the canonical demo dataset described in the
@@ -16,7 +16,7 @@ const ENGAGEMENT_MID_PCT = 7.3;
 const ENGAGEMENT_OLDEST_PCT = 6.6;
 
 export async function seedFollowerHistory(
-  prisma: PrismaClient,
+  db: AutoDmDatabase,
   workspaceId: string,
   socialAccountId: string,
   rng: () => number,
@@ -70,12 +70,12 @@ export async function seedFollowerHistory(
   // Force exact reconciliation on the final day so the headline number matches precisely.
   followerRows[NUM_DAYS - 1].followersCount = FOLLOWERS_CURRENT;
 
-  await prisma.followerSnapshot.deleteMany({ where: { socialAccountId } });
-  await prisma.followerSnapshot.createMany({
+  await db.followerSnapshot.deleteMany({ where: { socialAccountId } });
+  await db.followerSnapshot.createMany({
     data: followerRows.map((r) => ({ socialAccountId, ...r })),
   });
 
-  await prisma.profile.update({
+  await db.profile.update({
     where: { socialAccountId },
     data: {
       followersCount: FOLLOWERS_CURRENT,
@@ -142,14 +142,14 @@ export async function seedFollowerHistory(
     );
   }
 
-  await prisma.metricSnapshot.deleteMany({
+  await db.metricSnapshot.deleteMany({
     where: {
       workspaceId,
       accountId: socialAccountId,
       metricName: { in: ["reach", "impressions", "profile_visits", "website_clicks", "engagement_rate"] },
     },
   });
-  await prisma.metricSnapshot.createMany({ data: metricRows });
+  await db.metricSnapshot.createMany({ data: metricRows });
 
   return { followerRows, reachSeries, impressionsSeries, visitsSeries, clicksSeries };
 }

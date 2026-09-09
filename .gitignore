@@ -43,13 +43,12 @@ next-env.d.ts
 # claude code internal
 .claude/
 
-/src/generated/prisma
 
-# generated prisma client
-/src/generated/prisma
 
 # next dev logs
 .next/dev/
 
 # local dev server log
 dev.log
+
+certificates

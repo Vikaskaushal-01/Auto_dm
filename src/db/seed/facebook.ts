@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { AutoDmDatabase } from "@/lib/db";
 import { addDays, addHours, subDays } from "date-fns";
 import { seedConversationsForAccount } from "./conversations";
 
@@ -20,13 +20,13 @@ function randomFbUsername(rng: () => number) {
   return USERNAMES[Math.floor(rng() * USERNAMES.length)] + " " + Math.floor(rng() * 999);
 }
 
-export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rng: () => number) {
-  let socialAccount = await prisma.socialAccount.findFirst({
+export async function seedFacebook(db: AutoDmDatabase, workspaceId: string, rng: () => number) {
+  let socialAccount = await db.socialAccount.findFirst({
     where: { workspaceId, platform: "MESSENGER" },
   });
 
   if (!socialAccount) {
-    socialAccount = await prisma.socialAccount.create({
+    socialAccount = await db.socialAccount.create({
       data: {
         workspaceId,
         platform: "MESSENGER",
@@ -40,7 +40,7 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
     });
   }
 
-  await prisma.platformConnection.upsert({
+  await db.platformConnection.upsert({
     where: { socialAccountId: socialAccount.id },
     update: {},
     create: {
@@ -52,7 +52,7 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
     },
   });
 
-  await prisma.profile.upsert({
+  await db.profile.upsert({
     where: { socialAccountId: socialAccount.id },
     update: {},
     create: {
@@ -66,21 +66,21 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
   });
 
   // Clean slate for idempotent re-seeding.
-  await prisma.contentMetric.deleteMany({ where: { post: { socialAccountId: socialAccount.id } } });
-  await prisma.comment.deleteMany({ where: { post: { socialAccountId: socialAccount.id } } });
-  await prisma.automationRun.deleteMany({ where: { automation: { socialAccountId: socialAccount.id } } });
-  await prisma.automationAction.deleteMany({ where: { automation: { socialAccountId: socialAccount.id } } });
-  await prisma.automationTrigger.deleteMany({ where: { automation: { socialAccountId: socialAccount.id } } });
-  await prisma.automationTargetPost.deleteMany({ where: { automation: { socialAccountId: socialAccount.id } } });
-  await prisma.automation.deleteMany({ where: { socialAccountId: socialAccount.id } });
-  await prisma.post.deleteMany({ where: { socialAccountId: socialAccount.id } });
+  await db.contentMetric.deleteMany({ where: { post: { socialAccountId: socialAccount.id } } });
+  await db.comment.deleteMany({ where: { post: { socialAccountId: socialAccount.id } } });
+  await db.automationRun.deleteMany({ where: { automation: { socialAccountId: socialAccount.id } } });
+  await db.automationAction.deleteMany({ where: { automation: { socialAccountId: socialAccount.id } } });
+  await db.automationTrigger.deleteMany({ where: { automation: { socialAccountId: socialAccount.id } } });
+  await db.automationTargetPost.deleteMany({ where: { automation: { socialAccountId: socialAccount.id } } });
+  await db.automation.deleteMany({ where: { socialAccountId: socialAccount.id } });
+  await db.post.deleteMany({ where: { socialAccountId: socialAccount.id } });
 
   const today = new Date();
   const postIds: string[] = [];
 
   for (let i = 0; i < FB_CAPTIONS.length; i++) {
     const publishedAt = subDays(today, (FB_CAPTIONS.length - i) * 6);
-    const post = await prisma.post.create({
+    const post = await db.post.create({
       data: {
         socialAccountId: socialAccount.id,
         externalId: `demo_fb_post_${i}`,
@@ -122,11 +122,11 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
         linkClicks: Math.round(views * 0.003),
       });
     }
-    if (metricRows.length > 0) await prisma.contentMetric.createMany({ data: metricRows });
+    if (metricRows.length > 0) await db.contentMetric.createMany({ data: metricRows });
   }
 
   // One automation ("Page Welcome Bot") with its own small comment->Messenger funnel.
-  const automation = await prisma.automation.create({
+  const automation = await db.automation.create({
     data: {
       workspaceId,
       socialAccountId: socialAccount.id,
@@ -135,13 +135,13 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
       scope: "SPECIFIC_POSTS",
     },
   });
-  await prisma.automationTrigger.create({
+  await db.automationTrigger.create({
     data: { automationId: automation.id, keywordGroup: ["guide", "info"], matchType: "CONTAINS", caseSensitive: false },
   });
-  await prisma.automationTargetPost.createMany({
+  await db.automationTargetPost.createMany({
     data: [postIds[1], postIds[4]].map((postId) => ({ automationId: automation.id, postId })),
   });
-  await prisma.automationAction.createMany({
+  await db.automationAction.createMany({
     data: [
       {
         automationId: automation.id,
@@ -174,7 +174,7 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
     createdAtPlatform: subDays(today, Math.floor(rng() * 30)),
     matchedAutomationId: automation.id,
   }));
-  const comments = await prisma.comment.createManyAndReturn({ data: commentsData });
+  const comments = await db.comment.createManyAndReturn({ data: commentsData });
 
   const sentCount = Math.round(matchedComments * 0.94);
   const deliveredCount = Math.round(sentCount * 0.97);
@@ -194,14 +194,14 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
         | "TRIGGERED",
     };
   });
-  await prisma.automationRun.createMany({ data: runsData });
+  await db.automationRun.createMany({ data: runsData });
 
   // A handful of Messenger contacts + conversations for the Inbox.
-  await prisma.contact.deleteMany({ where: { workspaceId, socialAccountId: socialAccount.id } });
+  await db.contact.deleteMany({ where: { workspaceId, socialAccountId: socialAccount.id } });
   const contacts = await Promise.all(
     Array.from({ length: 10 }, async () => {
       const [firstName, lastName] = randomFbUsername(rng).split(" ");
-      return prisma.contact.create({
+      return db.contact.create({
         data: {
           workspaceId,
           socialAccountId: socialAccount.id,
@@ -214,7 +214,7 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
     }),
   );
   await seedConversationsForAccount(
-    prisma,
+    db,
     workspaceId,
     socialAccount.id,
     "MESSENGER",

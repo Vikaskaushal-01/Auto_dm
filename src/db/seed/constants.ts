@@ -5,7 +5,7 @@ export const DEMO_WORKSPACE_NAME = "Demo Creator Studio";
 export const DEMO_IG_USERNAME = "ai.with.aarav";
 export const DEMO_IG_DISPLAY_NAME = "Aarav | AI for Creators";
 
-// Fixed seed so `prisma db seed` (and `prisma migrate reset`) always produce
+// Fixed seed so seed scripts always produce
 // identical demo data — reproducible for screenshots/manual testing.
 export const RANDOM_SEED = 42;
 

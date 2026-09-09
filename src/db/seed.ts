@@ -1,6 +1,6 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { prisma } from "../src/lib/prisma";
+import { db } from "@/lib/db";
 import { createUserWorkspaceWithDemoAccount } from "./seed/workspace";
 import { seedFollowerHistory } from "./seed/follower-history";
 import { seedContent } from "./seed/content";
@@ -24,7 +24,7 @@ async function main() {
 
   console.log("Seeding demo workspace...");
   const passwordHash = await bcrypt.hash(DEMO_USER_PASSWORD, 10);
-  const { user, workspace, socialAccount } = await createUserWorkspaceWithDemoAccount(prisma, {
+  const { user, workspace, socialAccount } = await createUserWorkspaceWithDemoAccount(db, {
     email: DEMO_USER_EMAIL,
     passwordHash,
     name: "Aarav Sharma",
@@ -39,33 +39,33 @@ async function main() {
   console.log(`  social account: @${socialAccount.username} (demo mode)`);
 
   console.log("Seeding 90 days of follower/engagement history...");
-  await seedFollowerHistory(prisma, workspace.id, socialAccount.id, rng);
+  await seedFollowerHistory(db, workspace.id, socialAccount.id, rng);
 
   console.log("Seeding content (reels + images) with per-day metrics...");
-  const posts = await seedContent(prisma, socialAccount.id, rng);
+  const posts = await seedContent(db, socialAccount.id, rng);
   const postIdByIndex = new Map(posts.map((p) => [p.index, p.id]));
   console.log(`  ${posts.length} posts created`);
 
   console.log("Seeding automations (keyword triggers + DM actions)...");
-  const automationsByKey = await seedAutomations(prisma, workspace.id, socialAccount.id, postIdByIndex);
+  const automationsByKey = await seedAutomations(db, workspace.id, socialAccount.id, postIdByIndex);
   console.log(`  ${Object.keys(automationsByKey).length} automations created`);
 
   console.log("Seeding AutoDM funnel (comments -> DMs -> links -> leads -> conversions)...");
-  await seedFunnel(prisma, workspace.id, socialAccount.id, postIdByIndex, automationsByKey, rng);
+  await seedFunnel(db, workspace.id, socialAccount.id, postIdByIndex, automationsByKey, rng);
 
-  const runCount = await prisma.automationRun.count({ where: { automation: { workspaceId: workspace.id } } });
-  const leadCount = await prisma.lead.count({ where: { workspaceId: workspace.id } });
-  const conversionCount = await prisma.conversion.count({ where: { workspaceId: workspace.id } });
+  const runCount = await db.automationRun.count({ where: { automation: { workspaceId: workspace.id } } });
+  const leadCount = await db.lead.count({ where: { workspaceId: workspace.id } });
+  const conversionCount = await db.conversion.count({ where: { workspaceId: workspace.id } });
   console.log(`  ${runCount} automation runs, ${leadCount} leads, ${conversionCount} conversions`);
 
   console.log("Seeding Instagram inbox conversations from existing leads...");
-  const igContacts = await prisma.contact.findMany({
+  const igContacts = await db.contact.findMany({
     where: { workspaceId: workspace.id, socialAccountId: socialAccount.id },
     take: 15,
     select: { id: true },
   });
   await seedConversationsForAccount(
-    prisma,
+    db,
     workspace.id,
     socialAccount.id,
     "INSTAGRAM",
@@ -74,11 +74,11 @@ async function main() {
   );
 
   console.log("Seeding WhatsApp demo account (inbox + messaging tier)...");
-  const waAccount = await seedWhatsApp(prisma, workspace.id, rng);
+  const waAccount = await seedWhatsApp(db, workspace.id, rng);
   console.log(`  ${waAccount.username} (demo mode)`);
 
   console.log("Seeding Facebook demo account (posts + Page Welcome Bot)...");
-  const fbResult = await seedFacebook(prisma, workspace.id, rng);
+  const fbResult = await seedFacebook(db, workspace.id, rng);
   console.log(`  ${fbResult.socialAccount.username} (demo mode)`);
 
   console.log("Done.");
@@ -90,5 +90,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await db.$disconnect();
   });

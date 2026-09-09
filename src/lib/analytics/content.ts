@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import type { DateRange } from "./periods";
 
 export interface ContentSummary {
@@ -28,19 +28,34 @@ export async function getContentSummaries(
   accountId: string,
   range: DateRange,
 ): Promise<ContentSummary[]> {
-  const posts = await prisma.post.findMany({
+  const posts = await db.post.findMany({
     where: { socialAccountId: accountId },
     include: {
-      contentMetrics: { where: { metricDate: { gte: range.start, lte: range.end } } },
+      contentMetrics: { orderBy: { metricDate: "asc" } },
       automationTargets: { select: { id: true } },
     },
     orderBy: { publishedAt: "desc" },
   });
 
   return posts.map((post) => {
-    const m = post.contentMetrics;
-    const sum = (pick: (row: (typeof m)[number]) => number) => m.reduce((acc, row) => acc + pick(row), 0);
-    const engagementRate = m.length > 0 ? sum((r) => r.engagementRate) / m.length : 0;
+    const allMetrics = post.contentMetrics ?? [];
+    const inRangeMetrics = allMetrics.filter((r) => {
+      const d = new Date(r.metricDate).getTime();
+      return d >= range.start.getTime() && d <= range.end.getTime();
+    });
+
+    // If there are metrics recorded in the selected period, aggregate them.
+    // Otherwise fallback to the latest known metrics snapshot so the post never shows all zeroes.
+    const m = inRangeMetrics.length > 0
+      ? inRangeMetrics
+      : (allMetrics.length > 0 ? [allMetrics[allMetrics.length - 1]] : []);
+
+    const sum = (pick: (row: (typeof m)[number]) => number) =>
+      m.reduce((acc, row) => acc + (pick(row) || 0), 0);
+    const engagementRate =
+      m.length > 0
+        ? Math.round((sum((r) => r.engagementRate) / m.length) * 10) / 10
+        : 0;
 
     return {
       id: post.id,
@@ -61,7 +76,7 @@ export async function getContentSummaries(
       profileVisits: sum((r) => r.profileVisits),
       followersGained: sum((r) => r.followersGained),
       linkClicks: sum((r) => r.linkClicks),
-      hasAutomation: post.automationTargets.length > 0,
+      hasAutomation: (post.automationTargets?.length ?? 0) > 0,
     };
   });
 }
@@ -74,6 +89,11 @@ export async function getTopContent(
 ): Promise<ContentSummary[]> {
   const summaries = await getContentSummaries(accountId, range);
   return summaries
-    .sort((a, b) => (b[sortBy] as number) - (a[sortBy] as number))
+    .sort((a, b) => {
+      if (sortBy === "publishedAt") {
+        return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+      }
+      return (Number(b[sortBy]) || 0) - (Number(a[sortBy]) || 0);
+    })
     .slice(0, limit);
 }

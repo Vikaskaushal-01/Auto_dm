@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import type {
   ConnectionStatusDTO,
   DateRange,
@@ -29,7 +29,7 @@ function toFacebookPostType(dbType: string): FacebookPostTypeDTO {
 
 export class DemoFacebookConnector implements FacebookConnector {
   async getPageProfile(accountId: string): Promise<FacebookPageProfileDTO> {
-    const account = await prisma.socialAccount.findUniqueOrThrow({
+    const account = await db.socialAccount.findUniqueOrThrow({
       where: { id: accountId },
       include: { profile: true },
     });
@@ -44,7 +44,7 @@ export class DemoFacebookConnector implements FacebookConnector {
   }
 
   async getPosts(accountId: string, opts?: { since?: Date }): Promise<FacebookPostDTO[]> {
-    const rows = await prisma.post.findMany({
+    const rows = await db.post.findMany({
       where: {
         socialAccountId: accountId,
         publishedAt: opts?.since ? { gte: opts.since } : undefined,
@@ -63,7 +63,7 @@ export class DemoFacebookConnector implements FacebookConnector {
   }
 
   async getPostInsights(postId: string, range?: DateRange): Promise<FacebookPostInsightsDTO> {
-    const rows = await prisma.contentMetric.findMany({
+    const rows = await db.contentMetric.findMany({
       where: { postId, metricDate: range ? { gte: range.start, lte: range.end } : undefined },
     });
     const sum = (pick: (r: (typeof rows)[number]) => number) => rows.reduce((a, r) => a + pick(r), 0);
@@ -80,7 +80,7 @@ export class DemoFacebookConnector implements FacebookConnector {
   }
 
   async getComments(postId: string, opts?: { since?: Date }): Promise<FacebookCommentDTO[]> {
-    const rows = await prisma.comment.findMany({
+    const rows = await db.comment.findMany({
       where: { postId, createdAtPlatform: opts?.since ? { gte: opts.since } : undefined },
       orderBy: { createdAtPlatform: "desc" },
     });
@@ -95,7 +95,7 @@ export class DemoFacebookConnector implements FacebookConnector {
 
   async sendMessengerMessage(input: SendMessengerInput): Promise<SendResultDTO> {
     const now = new Date();
-    const run = await prisma.automationRun.create({
+    const run = await db.automationRun.create({
       data: {
         automationId: input.automationId,
         commentId: input.commentId,
@@ -109,11 +109,11 @@ export class DemoFacebookConnector implements FacebookConnector {
   }
 
   async replyToComment(commentId: string, _text: string): Promise<void> {
-    await prisma.comment.update({ where: { id: commentId }, data: { isFromAutomationReply: true } });
+    await db.comment.update({ where: { id: commentId }, data: { isFromAutomationReply: true } });
   }
 
   async verifyConnection(accountId: string): Promise<ConnectionStatusDTO> {
-    const connection = await prisma.platformConnection.findUnique({ where: { socialAccountId: accountId } });
+    const connection = await db.platformConnection.findUnique({ where: { socialAccountId: accountId } });
     if (!connection) return { ok: false, error: "No platform connection found" };
     return { ok: true };
   }

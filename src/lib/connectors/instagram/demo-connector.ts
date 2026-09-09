@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import type {
   CommentDTO,
   ConnectionStatusDTO,
@@ -21,11 +21,11 @@ import type {
 export class DemoInstagramConnector implements InstagramConnector {
   async getProfile(accountId: string): Promise<InstagramProfileDTO> {
     const [account, mediaCount] = await Promise.all([
-      prisma.socialAccount.findUniqueOrThrow({
+      db.socialAccount.findUniqueOrThrow({
         where: { id: accountId },
         include: { profile: true },
       }),
-      prisma.post.count({ where: { socialAccountId: accountId } }),
+      db.post.count({ where: { socialAccountId: accountId } }),
     ]);
     const profile = account.profile;
     return {
@@ -45,7 +45,7 @@ export class DemoInstagramConnector implements InstagramConnector {
     accountId: string,
     range: DateRange,
   ): Promise<FollowerHistoryPointDTO[]> {
-    const rows = await prisma.followerSnapshot.findMany({
+    const rows = await db.followerSnapshot.findMany({
       where: { socialAccountId: accountId, snapshotDate: { gte: range.start, lte: range.end } },
       orderBy: { snapshotDate: "asc" },
     });
@@ -62,7 +62,7 @@ export class DemoInstagramConnector implements InstagramConnector {
     accountId: string,
     opts?: { type?: PostTypeDTO; since?: Date },
   ): Promise<PostDTO[]> {
-    const rows = await prisma.post.findMany({
+    const rows = await db.post.findMany({
       where: {
         socialAccountId: accountId,
         type: opts?.type,
@@ -83,7 +83,7 @@ export class DemoInstagramConnector implements InstagramConnector {
   }
 
   async getReelInsights(postId: string, range?: DateRange): Promise<ReelInsightsDTO> {
-    const rows = await prisma.contentMetric.findMany({
+    const rows = await db.contentMetric.findMany({
       where: {
         postId,
         metricDate: range ? { gte: range.start, lte: range.end } : undefined,
@@ -114,7 +114,7 @@ export class DemoInstagramConnector implements InstagramConnector {
   }
 
   async getComments(postId: string, opts?: { since?: Date }): Promise<CommentDTO[]> {
-    const rows = await prisma.comment.findMany({
+    const rows = await db.comment.findMany({
       where: {
         postId,
         createdAtPlatform: opts?.since ? { gte: opts.since } : undefined,
@@ -135,7 +135,7 @@ export class DemoInstagramConnector implements InstagramConnector {
     // style actions); a real connector would call the Graph API send-message
     // endpoint and reflect its actual delivery result here.
     const now = new Date();
-    const run = await prisma.automationRun.create({
+    const run = await db.automationRun.create({
       data: {
         automationId: input.automationId,
         commentId: input.commentId,
@@ -149,14 +149,14 @@ export class DemoInstagramConnector implements InstagramConnector {
   }
 
   async replyToComment(commentId: string, _text: string): Promise<void> {
-    await prisma.comment.update({
+    await db.comment.update({
       where: { id: commentId },
       data: { isFromAutomationReply: true },
     });
   }
 
   async verifyConnection(accountId: string): Promise<ConnectionStatusDTO> {
-    const connection = await prisma.platformConnection.findUnique({
+    const connection = await db.platformConnection.findUnique({
       where: { socialAccountId: accountId },
     });
     if (!connection) return { ok: false, error: "No platform connection found" };

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { getMetricValue } from "./aggregate";
 import type { DateRange } from "./periods";
 
@@ -26,7 +26,7 @@ export async function getLinkSummaries(
   workspaceId: string,
   range: DateRange,
 ): Promise<LinkSummary[]> {
-  const links = await prisma.link.findMany({
+  const links = await db.link.findMany({
     where: { workspaceId },
     include: { automation: { select: { id: true, name: true } } },
     orderBy: { createdAt: "desc" },
@@ -35,20 +35,20 @@ export async function getLinkSummaries(
   return Promise.all(
     links.map(async (link) => {
       const [clicksTotal, uniqueClicks, leads, conversionAgg, sentMetric] = await Promise.all([
-        prisma.linkClick.count({
+        db.linkClick.count({
           where: { linkId: link.id, clickedAt: { gte: range.start, lte: range.end } },
         }),
-        prisma.linkClick.count({
+        db.linkClick.count({
           where: {
             linkId: link.id,
             isUniqueForContact: true,
             clickedAt: { gte: range.start, lte: range.end },
           },
         }),
-        prisma.lead.count({
+        db.lead.count({
           where: { sourceLinkId: link.id, capturedAt: { gte: range.start, lte: range.end } },
         }),
-        prisma.conversion.aggregate({
+        db.conversion.aggregate({
           where: { linkId: link.id, occurredAt: { gte: range.start, lte: range.end } },
           _count: true,
           _sum: { amountCents: true },
@@ -77,7 +77,7 @@ export async function getLinkSummaries(
         openRate: sent > 0 ? (clicksTotal / sent) * 100 : 0,
         leads,
         conversions: conversionAgg._count,
-        revenueCents: conversionAgg._sum.amountCents ?? 0,
+        revenueCents: conversionAgg._sum?.amountCents ?? 0,
       };
     }),
   );

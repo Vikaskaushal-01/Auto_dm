@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus, Zap } from "lucide-react";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { computeMetrics } from "@/lib/analytics/metrics";
 import { formatCount } from "@/lib/analytics/format";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ const STATUS_STYLES: Record<string, string> = {
 export default async function AutomationsListPage() {
   const { workspaceId } = await getCurrentWorkspaceContext();
 
-  const automations = await prisma.automation.findMany({
+  const automations = await db.automation.findMany({
     where: { workspaceId },
     include: { triggers: true },
     orderBy: { createdAt: "desc" },
@@ -98,8 +98,8 @@ export default async function AutomationsListPage() {
                     <td className="px-3 py-3 text-neutral-400">
                       {a.triggers.flatMap((t) => t.keywordGroup).join(", ") || "—"}
                     </td>
-                    <td className="px-3 py-3 text-neutral-300">{formatCount(m.autodm_dms_sent.current)}</td>
-                    <td className="px-3 py-3 text-neutral-300">{formatCount(m.autodm_leads.current)}</td>
+                    <td className="px-3 py-3 text-neutral-300">{formatCount(m?.autodm_dms_sent?.current ?? 0)}</td>
+                    <td className="px-3 py-3 text-neutral-300">{formatCount(m?.autodm_leads?.current ?? 0)}</td>
                   </tr>
                 );
               })}

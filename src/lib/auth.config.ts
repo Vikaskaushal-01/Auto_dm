@@ -1,10 +1,17 @@
 import type { NextAuthConfig } from "next-auth";
 
-const PUBLIC_PATHS = ["/login", "/register"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/register",
+  "/api/webhooks",
+  "/api/auth",
+  "/api/l",
+  "/l",
+];
 
 /**
- * Edge-safe NextAuth config: no Prisma/bcrypt imports here. Middleware runs
- * on the Edge Runtime, which can't load the Prisma client (needs Node APIs).
+ * Edge-safe NextAuth config: no native DB/bcrypt imports here. Middleware runs
+ * on the Edge Runtime, which can't load the DB client (needs Node APIs).
  * The full config (src/lib/auth.ts) extends this with the Credentials
  * provider and runs in the Node.js runtime (route handlers, server actions,
  * server components).

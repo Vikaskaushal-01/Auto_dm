@@ -3,8 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Zap } from "lucide-react";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { computeMetrics } from "@/lib/analytics/metrics";
+import { getDailySeries } from "@/lib/analytics/aggregate";
 import { resolvePeriod, type PeriodKey } from "@/lib/analytics/periods";
 import { getAutomationFunnel } from "@/lib/analytics/funnel";
 import { MetricCard } from "@/components/analytics/metric-card";
@@ -42,12 +43,12 @@ export default async function ReelDetailPage({
 
   const { workspaceId, socialAccount } = await getCurrentWorkspaceContext();
 
-  const post = await prisma.post.findFirst({
+  const post = await db.post.findFirst({
     where: { id: reelId, socialAccountId: socialAccount.id },
   });
   if (!post) notFound();
 
-  const targets = await prisma.automationTargetPost.findMany({
+  const targets = await db.automationTargetPost.findMany({
     where: { postId: post.id },
     include: { automation: { select: { id: true, name: true } } },
   });
@@ -57,7 +58,7 @@ export default async function ReelDetailPage({
   const scope = { workspaceId, contentId: post.id };
   const metricKeys = REEL_METRICS.map((m) => m.key);
 
-  const [metrics, funnel] = await Promise.all([
+  const [metrics, funnel, sparklineEntries] = await Promise.all([
     computeMetrics(metricKeys, scope, period),
     automationIds.length > 0
       ? getAutomationFunnel(
@@ -65,7 +66,15 @@ export default async function ReelDetailPage({
           currentRange,
         )
       : null,
+    Promise.all(
+      metricKeys.map(async (key) => {
+        const pts = await getDailySeries(key, scope, currentRange);
+        return [key, pts.map((p) => p.value)] as const;
+      }),
+    ),
   ]);
+
+  const sparklines = Object.fromEntries(sparklineEntries);
 
   return (
     <div className="space-y-6">
@@ -109,7 +118,13 @@ export default async function ReelDetailPage({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {REEL_METRICS.map((m) => (
-          <MetricCard key={m.key} title={m.label} metric={metrics[m.key]} unit={m.unit} />
+          <MetricCard
+            key={m.key}
+            title={m.label}
+            metric={metrics[m.key]}
+            unit={m.unit}
+            sparklineData={sparklines[m.key]}
+          />
         ))}
       </div>
 

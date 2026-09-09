@@ -73,7 +73,7 @@ This part is identical for Instagram and Facebook (both go through Facebook Logi
 
 ### 3.1 Token encryption
 
-The schema already documents this requirement — `prisma/schema.prisma:310-311` has `PlatformConnection.accessToken`/`refreshToken` commented as **"encrypted at rest via lib/security/encryption.ts"** — but that file doesn't exist yet. Create it before storing any real token:
+The schema already documents this requirement — `src/types/models.ts` has `PlatformConnection.accessToken`/`refreshToken` commented as **"encrypted at rest via lib/security/encryption.ts"** — but that file doesn't exist yet. Create it before storing any real token:
 
 ```ts
 // src/lib/security/encryption.ts
@@ -106,7 +106,7 @@ export function decryptToken(payload: string): string {
 }
 ```
 
-Never store `accessToken`/`refreshToken` in plaintext — always pass them through `encryptToken()` before a Prisma write and `decryptToken()` right before making a Graph API call.
+Never store `accessToken`/`refreshToken` in plaintext — always pass them through `encryptToken()` before a database write and `decryptToken()` right before making a Graph API call.
 
 ### 3.2 OAuth route handlers
 
@@ -145,7 +145,7 @@ Page access tokens obtained this way don't expire as long as the user token they
 `src/app/(dashboard)/settings/integrations/page.tsx` already renders a disabled **"Connect via Meta"** button per platform, waiting on real credentials. Once the above routes exist:
 
 1. Replace the disabled button with a link to `/api/auth/meta/start?platform=instagram` (or `facebook` / `whatsapp`).
-2. In the callback handler, after storing the token, run `prisma.platformConnection.update({ where: { socialAccountId }, data: { mode: "LIVE" } })` — this one field flip is what makes every page in the app start reading real data instead of demo data, because `getInstagramConnector()` / `getFacebookConnector()` / `getWhatsAppConnector()` in each platform's `index.ts` already branch on `connection.mode`.
+2. In the callback handler, after storing the token, run `db.platformConnection.update({ where: { socialAccountId }, data: { mode: "LIVE" } })` — this one field flip is what makes every page in the app start reading real data instead of demo data, because `getInstagramConnector()` / `getFacebookConnector()` / `getWhatsAppConnector()` in each platform's `index.ts` already branch on `connection.mode`.
 3. Remove the `connectPlatformAction` demo-seeding call for that platform (it currently calls `seedFacebook`/`seedWhatsApp` — see `src/server/actions/settings.ts`) once you don't want new "Connect" clicks to fall back to demo seeding.
 
 ---
@@ -194,7 +194,7 @@ Automations currently trigger off comments seeded directly into Postgres. For li
 ### Constraints specific to Facebook
 
 - Everything operates at the **Page** level, not the personal profile — a user connects by picking one of the Pages they administer during OAuth (`GET /me/accounts`).
-- `pages_messaging` (required for the "Page Welcome Bot" style automations already seeded in `prisma/seed/facebook.ts`) has its own **24-hour standard messaging window** rule, plus narrower **Message Tags** that allow sending outside the window only for specific non-promotional purposes (e.g., `CONFIRMED_EVENT_UPDATE`) — do not use tags for promotional content, Meta actively audits this.
+- `pages_messaging` (required for the "Page Welcome Bot" style automations already seeded in `src/db/seed/facebook.ts`) has its own **24-hour standard messaging window** rule, plus narrower **Message Tags** that allow sending outside the window only for specific non-promotional purposes (e.g., `CONFIRMED_EVENT_UPDATE`) — do not use tags for promotional content, Meta actively audits this.
 
 ### What to implement
 
@@ -256,7 +256,7 @@ Any message sent outside the 24-hour window **must** use a pre-approved template
 |---|---|
 | `getBusinessProfile` | `GET /{phone-number-id}/whatsapp_business_profile` |
 | `getMessagingLimits` | `GET /{waba-id}` — read `messaging_limit_tier`, `quality_rating` fields, write them into `PlatformConnection.messagingTier`/`qualityRating`/`dailyMessageLimit` |
-| `getConversations` / `getMessages` | **No listing endpoint exists.** WhatsApp only pushes messages via webhook — conversations must be built and persisted locally from the inbound webhook stream (the existing `Conversation`/`Message` Prisma models already fit this; the webhook handler in Section 6 below just needs to upsert into them instead of the demo seed doing it) |
+| `getConversations` / `getMessages` | **No listing endpoint exists.** WhatsApp only pushes messages via webhook — conversations must be built and persisted locally from the inbound webhook stream (the existing `Conversation`/`Message` database models already fit this; the webhook handler in Section 6 below just needs to upsert into them instead of the demo seed doing it) |
 | `sendMessage` | `POST /{phone-number-id}/messages` with `type: "text"` — only when `isWindowOpen()` is true |
 | `sendTemplateMessage` | `POST /{phone-number-id}/messages` with `type: "template"` |
 | `getTemplates` | `GET /{waba-id}/message_templates` |

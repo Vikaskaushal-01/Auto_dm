@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
 import { slugify } from "@/lib/utils";
 
@@ -19,12 +19,12 @@ export async function updateBioPageAction(
   const { workspaceId } = await getCurrentWorkspaceContext();
   const slug = slugify(input.slug) || "creator";
 
-  const conflict = await prisma.bioPage.findUnique({ where: { slug } });
+  const conflict = await db.bioPage.findUnique({ where: { slug } });
   if (conflict && conflict.workspaceId !== workspaceId) {
     return { ok: false, error: "That link is already taken. Try a different one." };
   }
 
-  await prisma.bioPage.update({
+  await db.bioPage.update({
     where: { workspaceId },
     data: {
       displayName: input.displayName.trim() || "Creator",
@@ -41,11 +41,11 @@ export async function updateBioPageAction(
 
 export async function addBioLinkAction(bioPageId: string, label: string, url: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const page = await prisma.bioPage.findFirst({ where: { id: bioPageId, workspaceId } });
+  const page = await db.bioPage.findFirst({ where: { id: bioPageId, workspaceId } });
   if (!page) return;
 
-  const last = await prisma.bioLink.findFirst({ where: { bioPageId }, orderBy: { order: "desc" } });
-  await prisma.bioLink.create({
+  const last = await db.bioLink.findFirst({ where: { bioPageId }, orderBy: { order: "desc" } });
+  await db.bioLink.create({
     data: {
       bioPageId,
       label: label.trim() || "Untitled link",
@@ -59,12 +59,12 @@ export async function addBioLinkAction(bioPageId: string, label: string, url: st
 
 export async function updateBioLinkAction(linkId: string, label: string, url: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const link = await prisma.bioLink.findFirst({
+  const link = await db.bioLink.findFirst({
     where: { id: linkId, bioPage: { workspaceId } },
     include: { bioPage: true },
   });
   if (!link) return;
-  await prisma.bioLink.update({
+  await db.bioLink.update({
     where: { id: linkId },
     data: { label: label.trim() || "Untitled link", url: normalizeUrl(url) },
   });
@@ -74,19 +74,19 @@ export async function updateBioLinkAction(linkId: string, label: string, url: st
 
 export async function deleteBioLinkAction(linkId: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const link = await prisma.bioLink.findFirst({
+  const link = await db.bioLink.findFirst({
     where: { id: linkId, bioPage: { workspaceId } },
     include: { bioPage: true },
   });
   if (!link) return;
-  await prisma.bioLink.delete({ where: { id: linkId } });
+  await db.bioLink.delete({ where: { id: linkId } });
   revalidatePath("/link-in-bio");
   revalidatePath(`/b/${link.bioPage.slug}`);
 }
 
 export async function moveBioLinkAction(linkId: string, direction: "up" | "down"): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const link = await prisma.bioLink.findFirst({
+  const link = await db.bioLink.findFirst({
     where: { id: linkId, bioPage: { workspaceId } },
     include: { bioPage: { include: { links: { orderBy: { order: "asc" } } } } },
   });
@@ -98,9 +98,9 @@ export async function moveBioLinkAction(linkId: string, direction: "up" | "down"
   if (swapWith < 0 || swapWith >= links.length) return;
 
   const other = links[swapWith];
-  await prisma.$transaction([
-    prisma.bioLink.update({ where: { id: link.id }, data: { order: other.order } }),
-    prisma.bioLink.update({ where: { id: other.id }, data: { order: link.order } }),
+  await db.$transaction([
+    db.bioLink.update({ where: { id: link.id }, data: { order: other.order } }),
+    db.bioLink.update({ where: { id: other.id }, data: { order: link.order } }),
   ]);
   revalidatePath("/link-in-bio");
   revalidatePath(`/b/${link.bioPage.slug}`);

@@ -56,7 +56,7 @@ export default async function ProfileAnalyticsPage({
       <div className="flex flex-wrap items-center gap-4 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-800">
           {profile.avatarUrl && (
-            <Image src={profile.avatarUrl} alt="" fill sizes="64px" className="object-cover" />
+            <Image src={profile.avatarUrl} alt="" fill sizes="64px" className="object-cover" unoptimized />
           )}
         </div>
         <div className="min-w-0">

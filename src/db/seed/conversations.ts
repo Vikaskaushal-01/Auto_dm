@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { AutoDmDatabase } from "@/lib/db";
 import { subHours, subMinutes } from "date-fns";
 
 const OPENERS = [
@@ -22,15 +22,15 @@ const BOT_REPLIES = [
  * AutoDM funnel) or freshly created ones (Facebook).
  */
 export async function seedConversationsForAccount(
-  prisma: PrismaClient,
+  db: AutoDmDatabase,
   workspaceId: string,
   socialAccountId: string,
   platform: "INSTAGRAM" | "MESSENGER",
   contactIds: string[],
   rng: () => number,
 ) {
-  await prisma.message.deleteMany({ where: { conversation: { socialAccountId } } });
-  await prisma.conversation.deleteMany({ where: { socialAccountId } });
+  await db.message.deleteMany({ where: { conversation: { socialAccountId } } });
+  await db.conversation.deleteMany({ where: { socialAccountId } });
 
   const now = new Date();
 
@@ -39,7 +39,7 @@ export async function seedConversationsForAccount(
     const lastInboundAt = subHours(now, hoursAgo);
     const opener = OPENERS[Math.floor(rng() * OPENERS.length)];
 
-    const conversation = await prisma.conversation.create({
+    const conversation = await db.conversation.create({
       data: {
         workspaceId,
         socialAccountId,
@@ -52,7 +52,7 @@ export async function seedConversationsForAccount(
       },
     });
 
-    await prisma.message.create({
+    await db.message.create({
       data: {
         conversationId: conversation.id,
         direction: "INBOUND",
@@ -64,7 +64,7 @@ export async function seedConversationsForAccount(
 
     if (rng() < 0.75) {
       const reply = BOT_REPLIES[Math.floor(rng() * BOT_REPLIES.length)];
-      await prisma.message.create({
+      await db.message.create({
         data: {
           conversationId: conversation.id,
           direction: "OUTBOUND",
@@ -73,7 +73,7 @@ export async function seedConversationsForAccount(
           sentAt: lastInboundAt,
         },
       });
-      await prisma.conversation.update({
+      await db.conversation.update({
         where: { id: conversation.id },
         data: { lastMessageAt: lastInboundAt },
       });

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { DemoInstagramConnector } from "./demo-connector";
 import { GraphAPIInstagramConnector } from "./graph-connector";
 import type { InstagramConnector } from "./types";
@@ -13,7 +13,7 @@ const graphConnector = new GraphAPIInstagramConnector();
  * one-line change (PlatformConnection.mode flips from DEMO to LIVE).
  */
 export async function getInstagramConnector(socialAccountId: string): Promise<InstagramConnector> {
-  const connection = await prisma.platformConnection.findUnique({
+  const connection = await db.platformConnection.findUnique({
     where: { socialAccountId },
     select: { mode: true },
   });

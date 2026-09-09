@@ -11,12 +11,14 @@ export function Topbar({
   userName,
   userEmail,
   accounts,
+  isLive = false,
   onOpenMobileMenu,
 }: {
   workspaceName: string;
   userName: string;
   userEmail: string;
   accounts: ConnectedAccountSummary[];
+  isLive?: boolean;
   onOpenMobileMenu?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -34,7 +36,14 @@ export function Topbar({
         </button>
         <div>
           <p className="text-sm font-semibold text-white">{workspaceName}</p>
-          <p className="text-xs text-neutral-500">Instagram · Demo mode</p>
+          {isLive ? (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <p className="text-xs font-medium text-emerald-400">Instagram · Live mode</p>
+            </div>
+          ) : (
+            <p className="text-xs text-neutral-500">Instagram · Demo mode</p>
+          )}
         </div>
       </div>
 

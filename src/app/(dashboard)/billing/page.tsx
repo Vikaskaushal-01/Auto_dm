@@ -1,12 +1,12 @@
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { PLAN_DEFS, PLAN_RANK, type PurchasablePlan } from "@/lib/plans";
 import { PlanCard } from "@/components/billing/plan-card";
 
 export default async function BillingPage() {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
-  const subscription = await prisma.subscription.findUnique({ where: { workspaceId } });
+  const workspace = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+  const subscription = await db.subscription.findUnique({ where: { workspaceId } });
 
   const currentPlan: PurchasablePlan | null = workspace.plan in PLAN_RANK ? (workspace.plan as PurchasablePlan) : null;
   const currentRank = currentPlan ? PLAN_RANK[currentPlan] : -1;

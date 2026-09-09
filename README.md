@@ -10,37 +10,30 @@ without reworking what's here. See `docs/` or ask for the full product spec.
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · Prisma 7 + PostgreSQL · NextAuth v5
+Next.js 16 (App Router) · TypeScript · MongoDB (Native Driver) · NextAuth v5
 (Credentials) · Tailwind CSS · Recharts · Zod
 
 ## Getting started
 
-1. **Start Postgres** (Docker required):
-
-   ```bash
-   docker compose up -d
-   ```
-
-   Runs on `localhost:5433` (5432 is commonly taken by a native Postgres
-   install — check `docker-compose.yml` / `.env` if you need to change it).
+1. **MongoDB**:
+   Ensure MongoDB is running locally (e.g. `brew services start mongodb-community`). Default URI is `mongodb://127.0.0.1:27017/autodm`.
 
 2. **Install dependencies and configure environment**:
 
    ```bash
    npm install
-   cp .env.example .env   # then fill in AUTH_SECRET / TOKEN_ENCRYPTION_KEY with random values
+   cp .env.example .env   # then fill in AUTH_SECRET / TOKEN_ENCRYPTION_KEY
    ```
 
-3. **Run migrations and seed demo data**:
+3. **Seed demo data**:
 
    ```bash
-   npx prisma migrate deploy
-   npx prisma db seed
+   npm run seed
    ```
 
-   Seeding takes a few minutes (it generates 90 days of follower/content
-   history plus a realistic AutoDM funnel with thousands of rows). It creates
-   a demo login: `demo@autodm.app` / `Demo1234!`.
+   Seeding populates 90 days of follower/content history plus an AutoDM
+   funnel with thousands of realistic rows. It creates the demo login:
+   `demo@autodm.app` / `Demo1234!`.
 
 4. **Run the dev server**:
 
@@ -48,7 +41,7 @@ Next.js 16 (App Router) · TypeScript · Prisma 7 + PostgreSQL · NextAuth v5
    npm run dev
    ```
 
-   Open [http://localhost:3000](http://localhost:3000) — you'll land on
+   Open [http://localhost:3000](http://localhost:3000) (or the port indicated if 3000 is occupied) — you'll land on
    `/login`. Use the demo credentials above, or register a new account (which
    bootstraps its own workspace + demo Instagram account automatically).
 
@@ -89,11 +82,11 @@ encountered and what was ruled out.
   `layout/`, `automations/`, `settings/`
 - `src/lib/analytics` — the shared metric-computation layer
   (`computeMetric`, funnel, content/link/automation aggregation). Every
-  displayed number goes through this, never a raw Prisma query in a page.
+  displayed number goes through this, never a raw database query in a page.
 - `src/lib/connectors` — platform connector abstraction (Instagram now;
   the pattern is meant to be repeated per-platform later)
 - `src/server/actions` — Next.js Server Actions (mutations)
-- `prisma/schema.prisma` — full data model, including tables not yet used
-  by Phase 1 UI
-- `prisma/seed/` — demo data generators, reusable by both `prisma/seed.ts`
+- `src/lib/db.ts` — native MongoDB database client and collections
+- `src/types/models.ts` — full TypeScript data models
+- `src/db/seed/` — demo data generators, reusable by both `src/db/seed.ts`
   and the in-app "Regenerate Demo Data" action

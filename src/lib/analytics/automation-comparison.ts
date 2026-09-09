@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { getAutomationFunnel } from "./funnel";
 import type { DateRange } from "./periods";
 
@@ -19,7 +19,7 @@ export async function getAutomationComparisonRows(
   workspaceId: string,
   range: DateRange,
 ): Promise<AutomationComparisonRow[]> {
-  const automations = await prisma.automation.findMany({
+  const automations = await db.automation.findMany({
     where: { workspaceId },
     select: { id: true, name: true, status: true },
     orderBy: { createdAt: "desc" },

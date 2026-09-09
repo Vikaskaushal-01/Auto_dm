@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { AutoDmDatabase } from "@/lib/db";
 import { addDays, differenceInCalendarDays } from "date-fns";
 import { dateForIndex, NUM_DAYS } from "./series";
 
@@ -69,13 +69,13 @@ function decayMetricsForDay(dayOffset: number, baseViews: number, rng: () => num
 }
 
 export async function seedContent(
-  prisma: PrismaClient,
+  db: AutoDmDatabase,
   socialAccountId: string,
   rng: () => number,
 ) {
-  await prisma.contentMetric.deleteMany({ where: { post: { socialAccountId } } });
-  await prisma.comment.deleteMany({ where: { post: { socialAccountId } } });
-  await prisma.post.deleteMany({ where: { socialAccountId } });
+  await db.contentMetric.deleteMany({ where: { post: { socialAccountId } } });
+  await db.comment.deleteMany({ where: { post: { socialAccountId } } });
+  await db.post.deleteMany({ where: { socialAccountId } });
 
   const posts: { id: string; index: number; isFlagship: boolean }[] = [];
   const today = dateForIndex(NUM_DAYS - 1);
@@ -86,7 +86,7 @@ export async function seedContent(
     const isImage = i === 5 || i === 11;
     const tier = tierForIndex(i);
 
-    const post = await prisma.post.create({
+    const post = await db.post.create({
       data: {
         socialAccountId,
         externalId: `demo_media_${i}`,
@@ -111,7 +111,7 @@ export async function seedContent(
       });
     }
     if (metricRows.length > 0) {
-      await prisma.contentMetric.createMany({ data: metricRows });
+      await db.contentMetric.createMany({ data: metricRows });
     }
   }
 

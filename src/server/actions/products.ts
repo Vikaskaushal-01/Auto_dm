@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import type { ProductType } from "@/generated/prisma/client";
+import type { ProductType } from "@/types/models";
 
 export interface CreateProductInput {
   name: string;
@@ -17,7 +17,7 @@ export interface CreateProductInput {
 
 export async function createProductAction(input: CreateProductInput): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const product = await prisma.product.create({
+  const product = await db.product.create({
     data: {
       workspaceId,
       name: input.name.trim() || "Untitled product",
@@ -37,7 +37,7 @@ export async function updateProductAction(
   input: CreateProductInput,
 ): Promise<{ ok: boolean }> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  const result = await prisma.product.updateMany({
+  const result = await db.product.updateMany({
     where: { id: productId, workspaceId },
     data: {
       name: input.name.trim() || "Untitled product",
@@ -55,14 +55,14 @@ export async function updateProductAction(
 
 export async function toggleProductActiveAction(productId: string, isActive: boolean): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  await prisma.product.updateMany({ where: { id: productId, workspaceId }, data: { isActive } });
+  await db.product.updateMany({ where: { id: productId, workspaceId }, data: { isActive } });
   revalidatePath("/products");
   revalidatePath(`/products/${productId}`);
 }
 
 export async function deleteProductAction(productId: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();
-  await prisma.product.deleteMany({ where: { id: productId, workspaceId } });
+  await db.product.deleteMany({ where: { id: productId, workspaceId } });
   revalidatePath("/products");
   redirect("/products");
 }
@@ -75,11 +75,11 @@ export async function createDemoOrderAction(
   productId: string,
   email: string,
 ): Promise<{ ok: boolean; error?: string; orderId?: string }> {
-  const product = await prisma.product.findFirst({ where: { id: productId, isActive: true } });
+  const product = await db.product.findFirst({ where: { id: productId, isActive: true } });
   if (!product) return { ok: false, error: "Product not found" };
   if (!email.trim() || !email.includes("@")) return { ok: false, error: "Enter a valid email" };
 
-  const order = await prisma.order.create({
+  const order = await db.order.create({
     data: {
       workspaceId: product.workspaceId,
       productId: product.id,

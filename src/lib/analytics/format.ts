@@ -79,15 +79,21 @@ export function formatMetricChange(
 
   const changeLabel = `${sign}${opts.compact ? formatCompact(absChange) : formatCount(absChange)}`;
 
+  if (metric.percentageChange !== null) {
+    const pctSign = metric.percentageChange > 0 ? "+" : metric.percentageChange < 0 ? "-" : "";
+    return {
+      changeLabel,
+      percentLabel: `${pctSign}${Math.abs(metric.percentageChange).toFixed(1)}%`,
+    };
+  }
+
   if (metric.isNew) {
     return { changeLabel, percentLabel: "New" };
   }
-  if (metric.percentageChange === null) {
-    return { changeLabel, percentLabel: "—" };
+
+  if (metric.absoluteChange === 0) {
+    return { changeLabel: "0", percentLabel: "0.0%" };
   }
-  const pctSign = metric.percentageChange > 0 ? "+" : metric.percentageChange < 0 ? "-" : "";
-  return {
-    changeLabel,
-    percentLabel: `${pctSign}${Math.abs(metric.percentageChange).toFixed(2)}%`,
-  };
+
+  return { changeLabel, percentLabel: "—" };
 }

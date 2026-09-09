@@ -1,4 +1,5 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { AutomationRunWhereInput } from "@/types/models";
+import type { AutoDmDatabase } from "@/lib/db";
 import { addHours } from "date-fns";
 import { buildScaledDailySeries, dateForIndex, last90in30DaySegments, NUM_DAYS } from "./series";
 import { AUTOMATION_BLUEPRINTS } from "./automations";
@@ -17,7 +18,7 @@ function randomUsername(rng: () => number) {
 const REVENUE_PER_CONVERSION_CENTS = 14300; // ~₹143 avg order value (paise)
 
 export async function seedFunnel(
-  prisma: PrismaClient,
+  db: AutoDmDatabase,
   workspaceId: string,
   socialAccountId: string,
   postIdByIndex: Map<number, string>,
@@ -31,7 +32,7 @@ export async function seedFunnel(
   ];
   const tagIdByKey = new Map<string, string>();
   for (const t of tagDefs) {
-    const tag = await prisma.tag.upsert({
+    const tag = await db.tag.upsert({
       where: { workspaceId_name: { workspaceId, name: t.name } },
       update: {},
       create: { workspaceId, name: t.name, color: t.color },
@@ -40,12 +41,12 @@ export async function seedFunnel(
   }
 
   // Clean slate for idempotent re-seeding.
-  await prisma.linkClick.deleteMany({ where: { link: { workspaceId } } });
-  await prisma.conversion.deleteMany({ where: { workspaceId } });
-  await prisma.lead.deleteMany({ where: { workspaceId } });
-  await prisma.contactTag.deleteMany({ where: { contact: { workspaceId } } });
-  await prisma.contact.deleteMany({ where: { workspaceId } });
-  await prisma.metricSnapshot.deleteMany({
+  await db.linkClick.deleteMany({ where: { link: { workspaceId } } });
+  await db.conversion.deleteMany({ where: { workspaceId } });
+  await db.lead.deleteMany({ where: { workspaceId } });
+  await db.contactTag.deleteMany({ where: { contact: { workspaceId } } });
+  await db.contact.deleteMany({ where: { workspaceId } });
+  await db.metricSnapshot.deleteMany({
     where: { workspaceId, metricName: { startsWith: "autodm_" } },
   });
 
@@ -116,7 +117,7 @@ export async function seedFunnel(
         createdAtPlatform: addHours(date, Math.floor(rng() * 20)),
         matchedAutomationId: info.automationId,
       }));
-      const comments = await prisma.comment.createManyAndReturn({ data: commentsData });
+      const comments = await db.comment.createManyAndReturn({ data: commentsData });
 
       // 2) AutomationRun rows — nested funnel: each stage is a strict subset
       // of the previous one (index 0..sentCount reaches "sent", etc.).
@@ -169,7 +170,7 @@ export async function seedFunnel(
         };
       });
 
-      const runs = await prisma.automationRun.createManyAndReturn({ data: runsData });
+      const runs = await db.automationRun.createManyAndReturn({ data: runsData });
 
       // 3) Contacts + Leads for rows that captured an email, LinkClicks for
       // every row that clicked, Conversions for rows that converted.
@@ -181,7 +182,7 @@ export async function seedFunnel(
 
         let contactId: string | undefined;
         if (j < leadCount) {
-          const contact = await prisma.contact.create({
+          const contact = await db.contact.create({
             data: {
               workspaceId,
               platformUsername: comment.authorUsername,
@@ -191,14 +192,14 @@ export async function seedFunnel(
           });
           contactId = contact.id;
           if (tagId) {
-            await prisma.contactTag.create({ data: { contactId: contact.id, tagId } });
+            await db.contactTag.create({ data: { contactId: contact.id, tagId } });
           }
-          await prisma.automationRun.update({
+          await db.automationRun.update({
             where: { id: run.id },
             data: { contactId: contact.id },
           });
 
-          const lead = await prisma.lead.create({
+          const lead = await db.lead.create({
             data: {
               workspaceId,
               contactId: contact.id,
@@ -210,7 +211,7 @@ export async function seedFunnel(
           });
 
           if (j < convertedCount) {
-            await prisma.conversion.create({
+            await db.conversion.create({
               data: {
                 workspaceId,
                 leadId: lead.id,
@@ -226,7 +227,7 @@ export async function seedFunnel(
         }
 
         if (info.linkId) {
-          await prisma.linkClick.create({
+          await db.linkClick.create({
             data: {
               linkId: info.linkId,
               contactId,
@@ -240,6 +241,6 @@ export async function seedFunnel(
   }
 
   if (metricRows.length > 0) {
-    await prisma.metricSnapshot.createMany({ data: metricRows });
+    await db.metricSnapshot.createMany({ data: metricRows });
   }
 }

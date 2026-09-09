@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { AutoDmDatabase } from "@/lib/db";
 
 export interface AutomationBlueprint {
   key: "ai-roadmap" | "ml-guide" | "templates" | "pricing-draft";
@@ -12,7 +12,7 @@ export interface AutomationBlueprint {
   linkSlug?: string;
   dmBody?: string;
   publicReplies?: string[];
-  // Funnel shape — see prisma/seed/funnel.ts for how these compose.
+  // Funnel shape — see src/db/seed/funnel.ts for how these compose.
   currentPeriodMatches?: number;
   sentRate?: number;
   deliveredRate?: number;
@@ -96,21 +96,21 @@ export const AUTOMATION_BLUEPRINTS: AutomationBlueprint[] = [
 ];
 
 export async function seedAutomations(
-  prisma: PrismaClient,
+  db: AutoDmDatabase,
   workspaceId: string,
   socialAccountId: string,
   postIdByIndex: Map<number, string>,
 ) {
-  await prisma.automationRun.deleteMany({ where: { automation: { workspaceId } } });
-  await prisma.automationAction.deleteMany({ where: { automation: { workspaceId } } });
-  await prisma.automationTrigger.deleteMany({ where: { automation: { workspaceId } } });
-  await prisma.automationTargetPost.deleteMany({ where: { automation: { workspaceId } } });
-  await prisma.automation.deleteMany({ where: { workspaceId } });
+  await db.automationRun.deleteMany({ where: { automation: { workspaceId } } });
+  await db.automationAction.deleteMany({ where: { automation: { workspaceId } } });
+  await db.automationTrigger.deleteMany({ where: { automation: { workspaceId } } });
+  await db.automationTargetPost.deleteMany({ where: { automation: { workspaceId } } });
+  await db.automation.deleteMany({ where: { workspaceId } });
 
   const created: Record<string, { automationId: string; linkId?: string }> = {};
 
   for (const bp of AUTOMATION_BLUEPRINTS) {
-    const automation = await prisma.automation.create({
+    const automation = await db.automation.create({
       data: {
         workspaceId,
         socialAccountId,
@@ -120,7 +120,7 @@ export async function seedAutomations(
       },
     });
 
-    await prisma.automationTrigger.create({
+    await db.automationTrigger.create({
       data: {
         automationId: automation.id,
         keywordGroup: bp.keywordGroup,
@@ -132,7 +132,7 @@ export async function seedAutomations(
     for (const idx of bp.targetPostIndexes) {
       const postId = postIdByIndex.get(idx);
       if (postId) {
-        await prisma.automationTargetPost.create({
+        await db.automationTargetPost.create({
           data: { automationId: automation.id, postId },
         });
       }
@@ -140,7 +140,7 @@ export async function seedAutomations(
 
     let linkId: string | undefined;
     if (bp.linkLabel && bp.linkDestination && bp.linkSlug) {
-      const link = await prisma.link.upsert({
+      const link = await db.link.upsert({
         where: { shortSlug: bp.linkSlug },
         update: {},
         create: {
@@ -158,7 +158,7 @@ export async function seedAutomations(
     }
 
     if (bp.publicReplies && bp.dmBody) {
-      await prisma.automationAction.createMany({
+      await db.automationAction.createMany({
         data: [
           {
             automationId: automation.id,

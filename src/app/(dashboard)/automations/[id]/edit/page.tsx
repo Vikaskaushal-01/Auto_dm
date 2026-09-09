@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { AutomationForm } from "@/components/automations/automation-form";
 import type { AutomationFormInput } from "@/lib/validation/automation";
 import { deleteAutomationAction } from "@/server/actions/automations";
 import { ConfirmDeleteButton } from "@/components/ui/confirm-delete-button";
+
+import { AutomationTester } from "@/components/automations/automation-tester";
 
 export default async function EditAutomationPage({
   params,
@@ -16,7 +18,7 @@ export default async function EditAutomationPage({
   const { id } = await params;
   const { workspaceId, socialAccount } = await getCurrentWorkspaceContext();
 
-  const automation = await prisma.automation.findFirst({
+  const automation = await db.automation.findFirst({
     where: { id, workspaceId },
     include: {
       triggers: true,
@@ -27,12 +29,12 @@ export default async function EditAutomationPage({
   if (!automation) notFound();
 
   const [posts, tags] = await Promise.all([
-    prisma.post.findMany({
+    db.post.findMany({
       where: { socialAccountId: socialAccount.id },
       select: { id: true, caption: true, thumbnailUrl: true },
       orderBy: { publishedAt: "desc" },
     }),
-    prisma.tag.findMany({ where: { workspaceId }, select: { id: true, name: true, color: true } }),
+    db.tag.findMany({ where: { workspaceId }, select: { id: true, name: true, color: true } }),
   ]);
 
   const trigger = automation.triggers[0];
@@ -58,8 +60,13 @@ export default async function EditAutomationPage({
     tagIds: dmAction?.tagIdsToApply ?? [],
   };
 
+  const defaultKeyword = trigger?.keywordGroup?.[0] || "website";
+  const baseUrl = process.env.WEBHOOK_BASE_URL || process.env.NEXTAUTH_URL || "https://localhost:3000";
+  const webhookUrl = `${baseUrl}/api/webhooks/instagram`;
+  const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || "autodm_verify_token_123";
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-white">{automation.name}</h1>
@@ -76,6 +83,15 @@ export default async function EditAutomationPage({
           <ConfirmDeleteButton onConfirm={deleteAutomationAction.bind(null, automation.id)} />
         </div>
       </div>
+
+      <AutomationTester
+        automationId={automation.id}
+        defaultKeyword={defaultKeyword}
+        defaultUsername={socialAccount.username}
+        webhookUrl={webhookUrl}
+        verifyToken={verifyToken}
+      />
+
       <AutomationForm
         automationId={automation.id}
         initial={initial}

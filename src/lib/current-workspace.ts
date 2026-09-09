@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 
 /**
  * Shared by every (dashboard) page: resolves the logged-in user's workspace
@@ -14,7 +14,7 @@ export async function getCurrentWorkspaceContext() {
     redirect("/login");
   }
 
-  const socialAccount = await prisma.socialAccount.findFirst({
+  const socialAccount = await db.socialAccount.findFirst({
     where: { workspaceId: session.workspaceId, platform: "INSTAGRAM" },
   });
   if (!socialAccount) {

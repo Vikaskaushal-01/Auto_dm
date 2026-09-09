@@ -1,17 +1,17 @@
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { AutomationForm } from "@/components/automations/automation-form";
 
 export default async function NewAutomationPage() {
   const { workspaceId, socialAccount } = await getCurrentWorkspaceContext();
 
   const [posts, tags] = await Promise.all([
-    prisma.post.findMany({
+    db.post.findMany({
       where: { socialAccountId: socialAccount.id },
       select: { id: true, caption: true, thumbnailUrl: true },
       orderBy: { publishedAt: "desc" },
     }),
-    prisma.tag.findMany({ where: { workspaceId }, select: { id: true, name: true, color: true } }),
+    db.tag.findMany({ where: { workspaceId }, select: { id: true, name: true, color: true } }),
   ]);
 
   return (

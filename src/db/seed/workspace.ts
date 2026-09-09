@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { AutoDmDatabase } from "@/lib/db";
 
 export interface CreateUserWorkspaceInput {
   email: string;
@@ -16,15 +16,15 @@ export interface CreateUserWorkspaceInput {
  * Instagram social account + platform connection + starting profile.
  * Idempotent on email/slug: safe to re-run without duplicating rows.
  *
- * Used both by the CLI demo seed (prisma/seed.ts) and by the real-user
+ * Used both by the CLI demo seed (src/db/seed.ts) and by the real-user
  * registration flow (src/server/actions/auth.ts) — every new signup lands on
  * a populated, demoable workspace immediately.
  */
 export async function createUserWorkspaceWithDemoAccount(
-  prisma: PrismaClient,
+  db: AutoDmDatabase,
   input: CreateUserWorkspaceInput,
 ) {
-  const user = await prisma.user.upsert({
+  const user = await db.user.upsert({
     where: { email: input.email },
     update: {},
     create: {
@@ -34,7 +34,7 @@ export async function createUserWorkspaceWithDemoAccount(
     },
   });
 
-  const workspace = await prisma.workspace.upsert({
+  const workspace = await db.workspace.upsert({
     where: { slug: input.workspaceSlug },
     update: {},
     create: {
@@ -44,7 +44,7 @@ export async function createUserWorkspaceWithDemoAccount(
     },
   });
 
-  await prisma.workspaceMember.upsert({
+  await db.workspaceMember.upsert({
     where: { workspaceId_userId: { workspaceId: workspace.id, userId: user.id } },
     update: {},
     create: {
@@ -55,12 +55,12 @@ export async function createUserWorkspaceWithDemoAccount(
     },
   });
 
-  let socialAccount = await prisma.socialAccount.findFirst({
+  let socialAccount = await db.socialAccount.findFirst({
     where: { workspaceId: workspace.id, platform: "INSTAGRAM" },
   });
 
   if (!socialAccount) {
-    socialAccount = await prisma.socialAccount.create({
+    socialAccount = await db.socialAccount.create({
       data: {
         workspaceId: workspace.id,
         platform: "INSTAGRAM",
@@ -76,7 +76,7 @@ export async function createUserWorkspaceWithDemoAccount(
     });
   }
 
-  await prisma.platformConnection.upsert({
+  await db.platformConnection.upsert({
     where: { socialAccountId: socialAccount.id },
     update: {},
     create: {
@@ -88,7 +88,7 @@ export async function createUserWorkspaceWithDemoAccount(
     },
   });
 
-  await prisma.profile.upsert({
+  await db.profile.upsert({
     where: { socialAccountId: socialAccount.id },
     update: {},
     create: {

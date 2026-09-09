@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { authConfig } from "@/lib/auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -20,7 +20,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await db.user.findUnique({ where: { email } });
         if (!user) return null;
 
         const isValid = await bcrypt.compare(password, user.passwordHash);
@@ -35,7 +35,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     jwt: async ({ token, user }) => {
       if (user?.id) {
         token.userId = user.id;
-        const membership = await prisma.workspaceMember.findFirst({
+        const membership = await db.workspaceMember.findFirst({
           where: { userId: user.id },
           orderBy: { createdAt: "asc" },
           select: { workspaceId: true },
