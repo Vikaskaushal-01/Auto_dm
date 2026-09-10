@@ -18,6 +18,7 @@ const PUBLIC_PATHS = [
  * server components).
  */
 export const authConfig = {
+  trustHost: true,
   pages: {
     signIn: "/login",
   },
@@ -30,11 +31,11 @@ export const authConfig = {
 
       if (pathname === "/") {
         return Response.redirect(
-          new URL(isLoggedIn ? "/dashboard" : "/login", request.nextUrl),
+          new URL(isLoggedIn ? "/dashboard" : "/login", request.url),
         );
       }
       if (isLoggedIn && isPublicPath) {
-        return Response.redirect(new URL("/dashboard", request.nextUrl));
+        return Response.redirect(new URL("/dashboard", request.url));
       }
       if (!isLoggedIn && !isPublicPath) {
         return false; // NextAuth redirects to pages.signIn with ?callbackUrl=
