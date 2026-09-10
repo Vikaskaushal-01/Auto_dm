@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../client/client";
+import type { PrismaClient } from "../generated-client";
 import { buildScaledDailySeries, dateForIndex, last90in30DaySegments, NUM_DAYS } from "./series";
 
 // Headline targets mirror the canonical demo dataset described in the

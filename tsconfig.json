@@ -37,19 +37,16 @@
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    "**/*.mts",
-    ".next_live/types/**/*.ts",
-    ".next_live/dev/types/**/*.ts",
-    ".next_dev_server/types/**/*.ts",
-    ".next_dev_server/dev/types/**/*.ts"
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    ".next_app",
-    ".next_dev",
+    "prisma",
+    "scripts",
+    ".next_dev_server",
+    ".next_live",
     ".next"
   ]
 }

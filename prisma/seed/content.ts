@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../client/client";
+import type { PrismaClient } from "../generated-client";
 import { addDays, differenceInCalendarDays } from "date-fns";
 import { dateForIndex, NUM_DAYS } from "./series";
 

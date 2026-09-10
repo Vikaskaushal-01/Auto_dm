@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../client/client";
+import type { PrismaClient } from "../generated-client";
 import { addHours, subHours, subMinutes } from "date-fns";
 
 const CONTACT_NAMES = [
