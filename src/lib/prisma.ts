@@ -1,5 +1,6 @@
-import { PrismaClient } from "../../prisma/generated-client/client";
+import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../../prisma/generated-client/client";
 
 export * from "../../prisma/generated-client/client";
 export * from "../../prisma/generated-client/enums";
@@ -24,9 +25,39 @@ export type {
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  pool: Pool | undefined;
 };
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+function getCleanConnectionString(): string | undefined {
+  let url = process.env.DATABASE_URL;
+  if (!url) return undefined;
+  // Strip ?sslmode=... from URL so Node pg doesn't trigger strict CA verification
+  if (url.includes("sslmode=")) {
+    url = url.replace(/([?&])sslmode=[^&]*(&|$)/, (m, p1, p2) => (p1 === "?" && p2 ? "?" : ""));
+    url = url.replace(/[?&]$/, "");
+  }
+  return url;
+}
+
+const connectionString = getCleanConnectionString();
+const isSslRequired =
+  Boolean(process.env.DATABASE_URL) &&
+  (process.env.DATABASE_URL.includes("supabase") ||
+   process.env.DATABASE_URL.includes("sslmode=") ||
+   process.env.NODE_ENV === "production");
+
+const pool =
+  globalForPrisma.pool ??
+  new Pool({
+    connectionString,
+    ssl: isSslRequired ? { rejectUnauthorized: false } : undefined,
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.pool = pool;
+}
+
+const adapter = new PrismaPg(pool);
 
 export const prisma =
   globalForPrisma.prisma ?? new PrismaClient({ adapter });

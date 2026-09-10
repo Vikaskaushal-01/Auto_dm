@@ -17,44 +17,53 @@ export async function registerAction(input: unknown): Promise<RegisterActionResu
   }
   const { name, email, password, workspaceName } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return { ok: false, error: "An account with this email already exists." };
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return { ok: false, error: "An account with this email already exists." };
+    }
+
+    const baseSlug = slugify(workspaceName) || "workspace";
+    let workspaceSlug = baseSlug;
+    let suffix = 1;
+    while (await prisma.workspace.findUnique({ where: { slug: workspaceSlug } })) {
+      workspaceSlug = `${baseSlug}-${++suffix}`;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        name,
+      },
+    });
+
+    const workspace = await prisma.workspace.create({
+      data: {
+        name: workspaceName,
+        slug: workspaceSlug,
+        plan: "FREE",
+      },
+    });
+
+    await prisma.workspaceMember.create({
+      data: {
+        workspaceId: workspace.id,
+        userId: user.id,
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+    });
+
+    return { ok: true };
+  } catch (err: unknown) {
+    console.error("Registration database error:", err);
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Failed to connect to database. Please verify your connection settings.";
+    return { ok: false, error: `Registration error: ${message}` };
   }
-
-  const baseSlug = slugify(workspaceName) || "workspace";
-  let workspaceSlug = baseSlug;
-  let suffix = 1;
-  while (await prisma.workspace.findUnique({ where: { slug: workspaceSlug } })) {
-    workspaceSlug = `${baseSlug}-${++suffix}`;
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-
-  const user = await prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-      name,
-    },
-  });
-
-  const workspace = await prisma.workspace.create({
-    data: {
-      name: workspaceName,
-      slug: workspaceSlug,
-      plan: "FREE",
-    },
-  });
-
-  await prisma.workspaceMember.create({
-    data: {
-      workspaceId: workspace.id,
-      userId: user.id,
-      role: "OWNER",
-      status: "ACTIVE",
-    },
-  });
-
-  return { ok: true };
 }
