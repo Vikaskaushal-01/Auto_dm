@@ -2,9 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { prisma, type ProductType } from "@/lib/prisma";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
-import type { ProductType } from "@/generated/prisma/client";
 
 export interface CreateProductInput {
   name: string;

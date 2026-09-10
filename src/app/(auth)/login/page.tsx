@@ -33,10 +33,6 @@ export default function LoginPage() {
     });
   }
 
-  function fillDemoCredentials() {
-    setForm({ email: "demo@autodm.app", password: "Demo1234!" });
-  }
-
   return (
     <div>
       <h1 className="text-xl font-semibold text-white">Welcome back</h1>
@@ -76,14 +72,6 @@ export default function LoginPage() {
           {isPending ? "Logging in..." : "Log in"}
         </Button>
       </form>
-
-      <button
-        type="button"
-        onClick={fillDemoCredentials}
-        className="mt-4 w-full rounded-lg border border-dashed border-neutral-700 py-2 text-xs text-neutral-400 hover:border-violet-500 hover:text-violet-300"
-      >
-        Use demo credentials (demo@autodm.app)
-      </button>
 
       <p className="mt-6 text-center text-sm text-neutral-400">
         Don&apos;t have an account?{" "}

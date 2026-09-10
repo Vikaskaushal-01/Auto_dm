@@ -3,6 +3,7 @@ import { FileText, BookOpen, LayoutTemplate, Video, Music, Archive, GraduationCa
 
 export const PRODUCT_TYPES = ["PDF", "EBOOK", "TEMPLATE", "VIDEO", "AUDIO", "ZIP", "COURSE"] as const;
 export type ProductTypeValue = (typeof PRODUCT_TYPES)[number];
+export type ProductType = ProductTypeValue;
 
 export const PRODUCT_TYPE_META: Record<ProductTypeValue, { label: string; icon: LucideIcon }> = {
   PDF: { label: "PDF", icon: FileText },

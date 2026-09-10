@@ -135,10 +135,19 @@ export class DemoInstagramConnector implements InstagramConnector {
     // style actions); a real connector would call the Graph API send-message
     // endpoint and reflect its actual delivery result here.
     const now = new Date();
+    let validCommentId: string | null = null;
+    if (input.commentId) {
+      const exists = await prisma.comment.findFirst({
+        where: { OR: [{ id: input.commentId }, { externalId: input.commentId }] },
+        select: { id: true },
+      });
+      validCommentId = exists?.id ?? null;
+    }
+
     const run = await prisma.automationRun.create({
       data: {
         automationId: input.automationId,
-        commentId: input.commentId,
+        commentId: validCommentId,
         triggeredAt: now,
         dmSentAt: now,
         dmDeliveredAt: now,
@@ -149,8 +158,9 @@ export class DemoInstagramConnector implements InstagramConnector {
   }
 
   async replyToComment(commentId: string, _text: string): Promise<void> {
-    await prisma.comment.update({
-      where: { id: commentId },
+    void _text;
+    await prisma.comment.updateMany({
+      where: { OR: [{ id: commentId }, { externalId: commentId }] },
       data: { isFromAutomationReply: true },
     });
   }

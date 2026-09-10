@@ -1,24 +1,15 @@
-import { prisma } from "@/lib/prisma";
-import { DemoInstagramConnector } from "./demo-connector";
 import { GraphAPIInstagramConnector } from "./graph-connector";
 import type { InstagramConnector } from "./types";
 
-const demoConnector = new DemoInstagramConnector();
 const graphConnector = new GraphAPIInstagramConnector();
 
 /**
- * Single point where the app decides demo vs. live Instagram data. Never
- * import DemoInstagramConnector/GraphAPIInstagramConnector directly — go
- * through this factory so wiring up real Meta credentials later is a
- * one-line change (PlatformConnection.mode flips from DEMO to LIVE).
+ * Single factory for the Instagram connector. Routes to the real Meta Graph API
+ * connector, fetching live from Meta Graph API when tokens exist or reading
+ * from the database cache.
  */
-export async function getInstagramConnector(socialAccountId: string): Promise<InstagramConnector> {
-  const connection = await prisma.platformConnection.findUnique({
-    where: { socialAccountId },
-    select: { mode: true },
-  });
-
-  return connection?.mode === "LIVE" ? graphConnector : demoConnector;
+export async function getInstagramConnector(_socialAccountId?: string): Promise<InstagramConnector> {
+  return graphConnector;
 }
 
 export type {

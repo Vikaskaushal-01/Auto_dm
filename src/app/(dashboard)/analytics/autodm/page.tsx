@@ -33,7 +33,7 @@ export default async function AutoDMAnalyticsPage({
   const sortBy = (VALID_SORTS.includes(sortParam ?? "") ? sortParam : "dmsSent") as keyof AutomationComparisonRow;
 
   const { workspaceId, socialAccount } = await getCurrentWorkspaceContext();
-  const scope = { workspaceId, accountId: socialAccount.id };
+  const scope = { workspaceId, accountId: socialAccount?.id };
   const { current: currentRange } = resolvePeriod(period);
   const metricKeys = AUTODM_METRICS.map((m) => m.key);
 

@@ -34,7 +34,11 @@ export function Topbar({
         </button>
         <div>
           <p className="text-sm font-semibold text-white">{workspaceName}</p>
-          <p className="text-xs text-neutral-500">Instagram · Demo mode</p>
+          <p className="text-xs text-neutral-500">
+            {accounts.length > 0
+              ? `${accounts.map((a) => a.platform.toLowerCase()).join(" · ")} · Live`
+              : "No accounts connected"}
+          </p>
         </div>
       </div>
 

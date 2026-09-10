@@ -51,7 +51,7 @@ export default async function AutomationPerformancePage({
   });
   if (!automation) notFound();
 
-  const scope = { workspaceId, accountId: socialAccount.id, automationId: automation.id };
+  const scope = { workspaceId, accountId: socialAccount?.id, automationId: automation.id };
   const { current: currentRange } = resolvePeriod(period);
   const metricKeys = AUTOMATION_METRICS.map((m) => m.key);
 

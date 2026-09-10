@@ -15,7 +15,12 @@
 
 # next.js
 /.next/
+/.next_dev/
+/.next_dev_server/
+/.next_live/
 /out/
+/prisma/client/
+/prisma/generated-client/
 
 # production
 /build

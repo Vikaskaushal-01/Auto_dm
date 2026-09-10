@@ -41,6 +41,7 @@ export default async function ReelDetailPage({
     : "30d") as PeriodKey;
 
   const { workspaceId, socialAccount } = await getCurrentWorkspaceContext();
+  if (!socialAccount) notFound();
 
   const post = await prisma.post.findFirst({
     where: { id: reelId, socialAccountId: socialAccount.id },

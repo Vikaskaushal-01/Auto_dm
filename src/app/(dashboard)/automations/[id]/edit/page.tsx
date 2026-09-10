@@ -28,7 +28,7 @@ export default async function EditAutomationPage({
 
   const [posts, tags] = await Promise.all([
     prisma.post.findMany({
-      where: { socialAccountId: socialAccount.id },
+      where: { socialAccountId: socialAccount?.id ?? automation.socialAccountId },
       select: { id: true, caption: true, thumbnailUrl: true },
       orderBy: { publishedAt: "desc" },
     }),

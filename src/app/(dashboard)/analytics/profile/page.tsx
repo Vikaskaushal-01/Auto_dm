@@ -1,5 +1,6 @@
+import Link from "next/link";
 import Image from "next/image";
-import { Globe } from "lucide-react";
+import { Globe, Camera } from "lucide-react";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
 import { getInstagramConnector } from "@/lib/connectors/instagram";
 import { computeMetrics } from "@/lib/analytics/metrics";
@@ -8,6 +9,7 @@ import { resolvePeriod, type PeriodKey } from "@/lib/analytics/periods";
 import { MetricCard } from "@/components/analytics/metric-card";
 import { PeriodSelector } from "@/components/analytics/period-selector";
 import { formatCount } from "@/lib/analytics/format";
+import { Button } from "@/components/ui/button";
 import type { MetricUnit } from "@/lib/analytics/format";
 
 const PROFILE_METRICS: { key: string; label: string; unit: MetricUnit; compact?: boolean }[] = [
@@ -29,6 +31,30 @@ export default async function ProfileAnalyticsPage({
     : "30d") as PeriodKey;
 
   const { workspaceId, socialAccount } = await getCurrentWorkspaceContext();
+
+  if (!socialAccount) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">Profile Analytics</h1>
+          <p className="mt-1 text-sm text-neutral-400">Account overview and growth performance.</p>
+        </div>
+        <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/40 p-12 text-center">
+          <Camera className="mx-auto h-10 w-10 text-neutral-600" />
+          <h3 className="mt-4 text-base font-semibold text-white">No account connected</h3>
+          <p className="mt-1 text-sm text-neutral-400 max-w-sm mx-auto">
+            Connect your Instagram Business account to view live followers, profile visits, and engagement analytics.
+          </p>
+          <Link href="/settings/integrations" className="mt-5 inline-block">
+            <Button className="bg-violet-600 hover:bg-violet-500 text-white">
+              Connect Account in Settings
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const scope = { workspaceId, accountId: socialAccount.id };
   const { current: currentRange } = resolvePeriod(period);
 

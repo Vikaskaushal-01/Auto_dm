@@ -5,5 +5,7 @@ const { auth } = NextAuth(authConfig);
 export const proxy = auth;
 
 export const config = {
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.svg$).*)"],
+  matcher: [
+    "/((?!api/auth|api/webhooks|api/bio|api/test|_next/static|_next/image|favicon.ico|.*\\.svg$).*)",
+  ],
 };

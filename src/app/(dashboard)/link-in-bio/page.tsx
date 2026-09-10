@@ -42,7 +42,7 @@ export default async function LinkInBioPage() {
           <p className="mb-2 text-xs font-medium text-neutral-500">Live preview</p>
           <div className="overflow-hidden rounded-2xl border border-neutral-800">
             <iframe
-              src={`/b/${page.slug}?preview=${Date.now()}`}
+              src={`/b/${page.slug}?preview=1`}
               className="h-[640px] w-full bg-neutral-950"
               title="Bio page preview"
             />

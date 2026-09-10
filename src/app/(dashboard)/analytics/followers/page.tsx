@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { format } from "date-fns";
+import { Users } from "lucide-react";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
 import { computeMetrics } from "@/lib/analytics/metrics";
 import { getDailySeries } from "@/lib/analytics/aggregate";
@@ -8,6 +10,7 @@ import { PeriodSelector } from "@/components/analytics/period-selector";
 import { GainLossCard } from "@/components/analytics/gain-loss-card";
 import { FollowerGrowthChart } from "@/components/charts/follower-growth-chart";
 import { formatCount } from "@/lib/analytics/format";
+import { Button } from "@/components/ui/button";
 
 export default async function FollowersAnalyticsPage({
   searchParams,
@@ -20,6 +23,30 @@ export default async function FollowersAnalyticsPage({
     : "30d") as PeriodKey;
 
   const { workspaceId, socialAccount } = await getCurrentWorkspaceContext();
+
+  if (!socialAccount) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">Followers</h1>
+          <p className="mt-1 text-sm text-neutral-400">Audience growth, gains, and losses.</p>
+        </div>
+        <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/40 p-12 text-center">
+          <Users className="mx-auto h-10 w-10 text-neutral-600" />
+          <h3 className="mt-4 text-base font-semibold text-white">No account connected</h3>
+          <p className="mt-1 text-sm text-neutral-400 max-w-sm mx-auto">
+            Connect your social account in Settings &gt; Integrations to track follower trends and growth.
+          </p>
+          <Link href="/settings/integrations" className="mt-5 inline-block">
+            <Button className="bg-violet-600 hover:bg-violet-500 text-white">
+              Connect Account in Settings
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const scope = { workspaceId, accountId: socialAccount.id };
   const { current: currentRange } = resolvePeriod(period);
 
@@ -81,18 +108,26 @@ export default async function FollowersAnalyticsPage({
               </tr>
             </thead>
             <tbody>
-              {dailyBreakdown.map((row, i) => (
-                <tr key={i} className="border-b border-neutral-800/60 text-neutral-300">
-                  <td className="py-2 pr-4">{row.date}</td>
-                  <td className="py-2 pr-4">{formatCount(row.followers)}</td>
-                  <td className="py-2 pr-4 text-emerald-400">+{formatCount(row.gained)}</td>
-                  <td className="py-2 pr-4 text-red-400">-{formatCount(row.lost)}</td>
-                  <td className={row.net >= 0 ? "py-2 text-emerald-400" : "py-2 text-red-400"}>
-                    {row.net >= 0 ? "+" : ""}
-                    {formatCount(row.net)}
+              {dailyBreakdown.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-xs text-neutral-500">
+                    No follower snapshots recorded yet. Data will appear after account synchronization.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                dailyBreakdown.map((row, i) => (
+                  <tr key={i} className="border-b border-neutral-800/60 text-neutral-300">
+                    <td className="py-2 pr-4">{row.date}</td>
+                    <td className="py-2 pr-4">{formatCount(row.followers)}</td>
+                    <td className="py-2 pr-4 text-emerald-400">+{formatCount(row.gained)}</td>
+                    <td className="py-2 pr-4 text-red-400">-{formatCount(row.lost)}</td>
+                    <td className={row.net >= 0 ? "py-2 text-emerald-400" : "py-2 text-red-400"}>
+                      {row.net >= 0 ? "+" : ""}
+                      {formatCount(row.net)}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

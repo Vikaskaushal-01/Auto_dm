@@ -4,7 +4,6 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils";
 import { registerSchema } from "@/lib/validation/auth";
-import { createUserWorkspaceWithDemoAccount } from "../../../prisma/seed/workspace";
 
 export interface RegisterActionResult {
   ok: boolean;
@@ -30,17 +29,31 @@ export async function registerAction(input: unknown): Promise<RegisterActionResu
     workspaceSlug = `${baseSlug}-${++suffix}`;
   }
 
-  const igUsername = slugify(name).replace(/-/g, ".") || `creator${Date.now()}`;
   const passwordHash = await bcrypt.hash(password, 10);
 
-  await createUserWorkspaceWithDemoAccount(prisma, {
-    email,
-    passwordHash,
-    name,
-    workspaceName,
-    workspaceSlug,
-    igUsername,
-    igDisplayName: name,
+  const user = await prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+      name,
+    },
+  });
+
+  const workspace = await prisma.workspace.create({
+    data: {
+      name: workspaceName,
+      slug: workspaceSlug,
+      plan: "FREE",
+    },
+  });
+
+  await prisma.workspaceMember.create({
+    data: {
+      workspaceId: workspace.id,
+      userId: user.id,
+      role: "OWNER",
+      status: "ACTIVE",
+    },
   });
 
   return { ok: true };

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { PrismaClient } from "../client/client";
 import { addDays, addHours, subDays } from "date-fns";
 import { seedConversationsForAccount } from "./conversations";
 
@@ -178,7 +178,7 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
 
   const sentCount = Math.round(matchedComments * 0.94);
   const deliveredCount = Math.round(sentCount * 0.97);
-  const runsData = comments.map((comment, j) => {
+  const runsData = comments.map((comment: { id: string; createdAtPlatform: Date }, j: number) => {
     const reachedSent = j < sentCount;
     const reachedDelivered = j < deliveredCount;
     return {
@@ -218,7 +218,7 @@ export async function seedFacebook(prisma: PrismaClient, workspaceId: string, rn
     workspaceId,
     socialAccount.id,
     "MESSENGER",
-    contacts.map((c) => c.id),
+    contacts.map((c: { id: string }) => c.id),
     rng,
   );
 

@@ -29,7 +29,7 @@ export function CheckoutForm({ productId, fileUrl }: { productId: string; fileUr
     return (
       <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-center">
         <CheckCircle className="mx-auto h-8 w-8 text-emerald-400" aria-hidden />
-        <p className="mt-2 text-sm font-medium text-emerald-300">You're all set!</p>
+        <p className="mt-2 text-sm font-medium text-emerald-300">You&apos;re all set!</p>
         <p className="mt-1 text-xs text-neutral-400">A confirmation was sent to {email}.</p>
         {fileUrl && (
           <a

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { PrismaClient } from "../client/client";
 
 export interface AutomationBlueprint {
   key: "ai-roadmap" | "ml-guide" | "templates" | "pricing-draft";

@@ -1,29 +1,40 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, type SocialAccount } from "@/lib/prisma";
+
+export interface WorkspaceContext {
+  userId: string;
+  workspaceId: string;
+  socialAccount: SocialAccount | null;
+}
 
 /**
  * Shared by every (dashboard) page: resolves the logged-in user's workspace
- * and primary Instagram account. The layout already redirects unauthenticated
- * requests to /login, but pages fetch this independently (server components
- * don't share request-scoped context) so each one is safe to hit directly.
+ * and primary connected account (prioritizing INSTAGRAM, then any other platform).
+ * Returns socialAccount as null if no account has been linked yet, preventing
+ * infinite redirect loops when navigating settings or dashboard without accounts.
  */
-export async function getCurrentWorkspaceContext() {
+export async function getCurrentWorkspaceContext(): Promise<WorkspaceContext> {
   const session = await auth();
   if (!session?.user || !session.workspaceId) {
     redirect("/login");
   }
 
-  const socialAccount = await prisma.socialAccount.findFirst({
+  let socialAccount = await prisma.socialAccount.findFirst({
     where: { workspaceId: session.workspaceId, platform: "INSTAGRAM" },
+    orderBy: { createdAt: "asc" },
   });
+
   if (!socialAccount) {
-    redirect("/settings/integrations");
+    socialAccount = await prisma.socialAccount.findFirst({
+      where: { workspaceId: session.workspaceId },
+      orderBy: { createdAt: "asc" },
+    });
   }
 
   return {
     userId: session.user.id,
     workspaceId: session.workspaceId,
-    socialAccount,
+    socialAccount: socialAccount ?? null,
   };
 }

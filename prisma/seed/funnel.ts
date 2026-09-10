@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../../src/generated/prisma/client";
+import type { PrismaClient } from "../client/client";
 import { addHours } from "date-fns";
 import { buildScaledDailySeries, dateForIndex, last90in30DaySegments, NUM_DAYS } from "./series";
 import { AUTOMATION_BLUEPRINTS } from "./automations";
@@ -120,7 +120,7 @@ export async function seedFunnel(
 
       // 2) AutomationRun rows — nested funnel: each stage is a strict subset
       // of the previous one (index 0..sentCount reaches "sent", etc.).
-      const runsData = comments.map((comment, j) => {
+      const runsData = comments.map((comment: { id: string; createdAtPlatform: Date }, j: number) => {
         const triggeredAt = comment.createdAtPlatform;
         const reachedSent = j < sentCount;
         const reachedDelivered = j < deliveredCount;

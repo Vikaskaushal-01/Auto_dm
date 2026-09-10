@@ -48,8 +48,7 @@ export default function RegisterPage() {
     <div>
       <h1 className="text-xl font-semibold text-white">Create your workspace</h1>
       <p className="mt-1 text-sm text-neutral-400">
-        Start with a fully populated demo Instagram account — connect a real
-        one later from Settings.
+        Automate comments, DMs, leads, and sales across Instagram, Facebook, and WhatsApp.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -60,7 +59,7 @@ export default function RegisterPage() {
             required
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Aarav Sharma"
+            placeholder="Alex Smith"
           />
         </div>
         <div>

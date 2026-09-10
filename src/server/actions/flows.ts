@@ -2,11 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { prisma, type Prisma } from "@/lib/prisma";
 import { getCurrentWorkspaceContext } from "@/lib/current-workspace";
 import { generateFlowFromPrompt } from "@/lib/flow-generator";
 import { FLOW_NODE_META, type FlowNodeType } from "@/lib/flow-node-types";
-import type { Prisma } from "@/generated/prisma/client";
 
 export async function createFlowAction(name: string): Promise<void> {
   const { workspaceId } = await getCurrentWorkspaceContext();

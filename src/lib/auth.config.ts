@@ -1,6 +1,14 @@
 import type { NextAuthConfig } from "next-auth";
 
-const PUBLIC_PATHS = ["/login", "/register"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/register",
+  "/api/webhooks",
+  "/api/bio",
+  "/api/test",
+  "/b",
+  "/p",
+];
 
 /**
  * Edge-safe NextAuth config: no Prisma/bcrypt imports here. Middleware runs

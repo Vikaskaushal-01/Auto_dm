@@ -188,6 +188,7 @@ export class DemoWhatsAppConnector implements WhatsAppConnector {
   }
 
   async getTemplates(_accountId: string): Promise<WhatsAppTemplateDTO[]> {
+    void _accountId;
     return DEMO_TEMPLATES;
   }
 

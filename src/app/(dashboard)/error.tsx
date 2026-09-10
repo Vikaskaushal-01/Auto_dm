@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -26,7 +27,9 @@ export default function DashboardError({
         <Button variant="outline" onClick={() => reset()}>
           Try again
         </Button>
-        <Button onClick={() => (window.location.href = "/dashboard")}>Go to Dashboard</Button>
+        <Link href="/dashboard">
+          <Button>Go to Dashboard</Button>
+        </Link>
       </div>
     </div>
   );

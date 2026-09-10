@@ -140,10 +140,13 @@ export function Sidebar({
       </nav>
 
       <div className="border-t border-neutral-800 p-3">
-        <div className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-violet-600/20 to-fuchsia-600/20 px-3 py-2.5 text-xs text-violet-200">
-          <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
-          <span>Demo mode — connect Instagram in Settings when ready.</span>
-        </div>
+        <Link
+          href="/settings/integrations"
+          className="flex items-center gap-2 rounded-lg bg-neutral-900/80 hover:bg-neutral-800 px-3 py-2 text-xs text-neutral-300 transition-colors"
+        >
+          <Sparkles className="h-4 w-4 text-violet-400 shrink-0" aria-hidden />
+          <span>Connect & Manage Accounts</span>
+        </Link>
       </div>
     </>
   );

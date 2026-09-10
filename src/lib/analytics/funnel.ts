@@ -1,5 +1,4 @@
-import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@/generated/prisma/client";
+import { prisma, type Prisma } from "@/lib/prisma";
 import type { DateRange } from "./periods";
 
 export interface FunnelStage {

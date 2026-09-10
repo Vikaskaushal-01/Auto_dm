@@ -62,6 +62,10 @@ export async function saveAutomationAction(
   const data = parsed.data;
   const { workspaceId, socialAccount } = await getCurrentWorkspaceContext();
 
+  if (!socialAccount) {
+    return { ok: false, error: "Please connect a social account in Settings before creating automations." };
+  }
+
   const automation = await prisma.automation.upsert({
     where: { id: automationId ?? "__new__" },
     update: { name: data.name, status: data.status, scope: data.scope },

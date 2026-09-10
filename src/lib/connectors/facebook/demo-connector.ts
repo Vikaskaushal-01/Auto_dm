@@ -109,6 +109,7 @@ export class DemoFacebookConnector implements FacebookConnector {
   }
 
   async replyToComment(commentId: string, _text: string): Promise<void> {
+    void _text;
     await prisma.comment.update({ where: { id: commentId }, data: { isFromAutomationReply: true } });
   }
 
