@@ -38,11 +38,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(target, baseUrl));
   }
 
-  // 2. Auth pages (/login, /register): if already logged in, redirect to /dashboard
+  // 2. Auth pages (/login, /register): always serve directly
   if (pathname === "/login" || pathname === "/register") {
-    if (isLoggedIn) {
-      return NextResponse.redirect(new URL("/dashboard", baseUrl));
-    }
     return NextResponse.next();
   }
 
