@@ -1,33 +1,67 @@
-import NextAuth from "next-auth";
-import { authConfig } from "@/lib/auth.config";
-
-if (process.env.VERCEL) {
-  const host =
-    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-    process.env.VERCEL_URL ||
-    "auto-dm-nine.vercel.app";
-  const url = `https://${host}`;
-  process.env.NEXTAUTH_URL = url;
-  process.env.AUTH_URL = url;
-}
-
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const { auth } = NextAuth(authConfig);
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/analytics",
+  "/automations",
+  "/settings",
+  "/billing",
+  "/link-in-bio",
+  "/crm",
+  "/products",
+];
 
-export async function proxy(request: NextRequest) {
-  try {
-    const res = await (auth as any)(request);
-    return res || NextResponse.next();
-  } catch (err) {
-    console.error("[Proxy Handled Error]:", err);
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Determine canonical live origin (never localhost on Vercel)
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host =
+    forwardedHost && !forwardedHost.includes("localhost")
+      ? forwardedHost
+      : process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+        request.headers.get("host") ||
+        "auto-dm-nine.vercel.app";
+  const proto = request.headers.get("x-forwarded-proto") || "https";
+  const baseUrl = `${proto}://${host}`;
+
+  // Check for NextAuth session cookie
+  const sessionToken =
+    request.cookies.get("__Secure-authjs.session-token")?.value ||
+    request.cookies.get("authjs.session-token")?.value;
+  const isLoggedIn = Boolean(sessionToken);
+
+  // 1. Root page: redirect to /dashboard if logged in, /login if not
+  if (pathname === "/") {
+    const target = isLoggedIn ? "/dashboard" : "/login";
+    return NextResponse.redirect(new URL(target, baseUrl));
+  }
+
+  // 2. Auth pages (/login, /register): if already logged in, redirect to /dashboard
+  if (pathname === "/login" || pathname === "/register") {
+    if (isLoggedIn) {
+      return NextResponse.redirect(new URL("/dashboard", baseUrl));
+    }
     return NextResponse.next();
   }
+
+  // 3. Protected dashboard routes: require login
+  const isProtected = PROTECTED_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix),
+  );
+
+  if (isProtected && !isLoggedIn) {
+    const loginUrl = new URL("/login", baseUrl);
+    loginUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    "/((?!api/auth|api/webhooks|api/bio|api/test|_next/static|_next/image|favicon.ico|.*\\.svg$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.svg$).*)",
   ],
 };
