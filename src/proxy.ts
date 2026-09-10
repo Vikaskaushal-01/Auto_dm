@@ -11,8 +11,20 @@ if (process.env.VERCEL) {
   process.env.AUTH_URL = url;
 }
 
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
 const { auth } = NextAuth(authConfig);
-export const proxy = auth;
+
+export async function proxy(request: NextRequest) {
+  try {
+    const res = await (auth as any)(request);
+    return res || NextResponse.next();
+  } catch (err) {
+    console.error("[Proxy Handled Error]:", err);
+    return NextResponse.next();
+  }
+}
 
 export const config = {
   matcher: [
