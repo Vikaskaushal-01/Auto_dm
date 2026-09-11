@@ -50,14 +50,18 @@ export async function GET(request: Request) {
   }
 
   const { workspaceId, platform, authProvider } = stateData;
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
+  const rawAppId = process.env.META_APP_ID;
+  const rawAppSecret = process.env.META_APP_SECRET;
+  const appId = rawAppId?.trim().replace(/^["']|["']$/g, "");
+  const appSecret = rawAppSecret?.trim().replace(/^["']|["']$/g, "");
   const redirectUri = getMetaRedirectUri(request.url);
 
   if (!appId || !appSecret) {
     baseUrl.searchParams.set("error", "meta_credentials_missing_in_server");
     return NextResponse.redirect(baseUrl);
   }
+
+  const cleanCode = code.replace(/#_$/, "");
 
   try {
     // 0. Direct Instagram Login (for Instagram App IDs created via Instagram API)
@@ -67,7 +71,7 @@ export async function GET(request: Request) {
       igBody.append("client_secret", appSecret);
       igBody.append("grant_type", "authorization_code");
       igBody.append("redirect_uri", redirectUri);
-      igBody.append("code", code);
+      igBody.append("code", cleanCode);
 
       const igTokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
         method: "POST",
@@ -214,7 +218,7 @@ export async function GET(request: Request) {
     tokenUrl.searchParams.set("client_id", appId);
     tokenUrl.searchParams.set("client_secret", appSecret);
     tokenUrl.searchParams.set("redirect_uri", redirectUri);
-    tokenUrl.searchParams.set("code", code);
+    tokenUrl.searchParams.set("code", cleanCode);
 
     const tokenRes = await fetch(tokenUrl.toString());
     const tokenJson = (await tokenRes.json()) as OAuthTokenResponse & { error?: { message: string } };

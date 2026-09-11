@@ -38,15 +38,15 @@ export function getLiveBaseUrl(requestUrl?: string): string {
  * On local dev, respects META_REDIRECT_URI or localhost.
  */
 export function getMetaRedirectUri(requestUrl?: string): string {
+  if (process.env.META_REDIRECT_URI) {
+    return process.env.META_REDIRECT_URI;
+  }
+
   const vercelDomain =
     process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
 
   if (vercelDomain) {
     return `https://${vercelDomain}/api/auth/meta/callback`;
-  }
-
-  if (process.env.META_REDIRECT_URI) {
-    return process.env.META_REDIRECT_URI;
   }
 
   const base = getLiveBaseUrl(requestUrl);
