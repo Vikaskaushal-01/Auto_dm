@@ -48,10 +48,8 @@ export async function GET(request: Request) {
   // Determine redirect URI (auto-detects Vercel production domain or respects META_REDIRECT_URI)
   const redirectUri = getMetaRedirectUri(request.url);
 
-  // If connecting Instagram directly (or by default for Instagram platform unless Facebook Page is specified),
-  // route through Instagram API authorize endpoint.
-  // If provider is explicitly "facebook" or platform is facebook, route through Facebook Login dialog.
-  const useInstagramDirect = isInstagram && provider !== "facebook";
+  // Meta Graph API connects Instagram Business & Facebook Pages via Facebook Login for Business dialog
+  const useInstagramDirect = provider === "instagram";
   const authProvider = useInstagramDirect ? "instagram" : "facebook";
 
   const stateObj = {
