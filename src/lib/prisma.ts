@@ -1,11 +1,11 @@
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../../prisma/generated-client/client";
+import { PrismaClient } from "../../prisma/client-gen/client";
 
-export * from "../../prisma/generated-client/client";
-export * from "../../prisma/generated-client/enums";
-export { Prisma, PrismaClient } from "../../prisma/generated-client/client";
-export type { ProductType, Platform } from "../../prisma/generated-client/enums";
+export * from "../../prisma/client-gen/client";
+export * from "../../prisma/client-gen/enums";
+export { Prisma, PrismaClient } from "../../prisma/client-gen/client";
+export type { ProductType, Platform } from "../../prisma/client-gen/enums";
 export type {
   Comment,
   Post,
@@ -40,10 +40,11 @@ function getCleanConnectionString(): string | undefined {
 }
 
 const connectionString = getCleanConnectionString();
+const databaseUrl = process.env.DATABASE_URL;
 const isSslRequired =
-  Boolean(process.env.DATABASE_URL) &&
-  (process.env.DATABASE_URL.includes("supabase") ||
-   process.env.DATABASE_URL.includes("sslmode=") ||
+  databaseUrl != null &&
+  (databaseUrl.includes("supabase") ||
+   databaseUrl.includes("sslmode=") ||
    process.env.NODE_ENV === "production");
 
 const pool =

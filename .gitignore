@@ -15,12 +15,14 @@
 
 # next.js
 /.next/
+/.next_cache/
 /.next_dev/
 /.next_dev_server/
 /.next_live/
 /out/
 /prisma/client/
 /prisma/generated-client/
+/prisma/client-gen/
 
 # production
 /build

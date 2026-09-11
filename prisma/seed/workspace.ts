@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../generated-client";
+import type { PrismaClient } from "../client-gen";
 
 export interface CreateUserWorkspaceInput {
   email: string;

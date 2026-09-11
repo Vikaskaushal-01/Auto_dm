@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../generated-client";
+import type { PrismaClient } from "../client-gen";
 import { addDays, addHours, subDays } from "date-fns";
 import { seedConversationsForAccount } from "./conversations";
 

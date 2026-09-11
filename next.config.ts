@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  ...(process.env.VERCEL ? {} : { distDir: ".next_dev_server" }),
+  ...(process.env.VERCEL ? {} : { distDir: ".next_cache" }),
   typescript: {
     ignoreBuildErrors: true,
   },
