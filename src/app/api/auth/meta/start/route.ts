@@ -48,34 +48,22 @@ export async function GET(request: Request) {
   // Determine redirect URI (auto-detects Vercel production domain or respects META_REDIRECT_URI)
   const redirectUri = getMetaRedirectUri(request.url);
 
-  // For Instagram, redirect directly to Instagram's official login & authorization dialog
-  const useInstagramDirect = isInstagram && provider !== "facebook";
-  const authProvider = useInstagramDirect ? "instagram" : "facebook";
-
   const stateObj = {
     workspaceId: session.workspaceId,
     userId: session.user.id,
     platform,
-    authProvider,
+    authProvider: "facebook",
     timestamp: Date.now(),
   };
   const state = Buffer.from(JSON.stringify(stateObj)).toString("base64url");
 
-  const authUrl = useInstagramDirect
-    ? new URL("https://api.instagram.com/oauth/authorize")
-    : new URL("https://www.facebook.com/v21.0/dialog/oauth");
+  // Meta Graph API (Instagram Business & Facebook Pages) uses Facebook Login for Business dialog
+  const authUrl = new URL("https://www.facebook.com/v21.0/dialog/oauth");
 
   authUrl.searchParams.set("client_id", appId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("state", state);
-  authUrl.searchParams.set(
-    "scope",
-    useInstagramDirect
-      ? INSTAGRAM_DIRECT_SCOPES
-      : isInstagram
-      ? INSTAGRAM_SCOPES
-      : FACEBOOK_SCOPES,
-  );
+  authUrl.searchParams.set("scope", isInstagram ? INSTAGRAM_SCOPES : FACEBOOK_SCOPES);
   authUrl.searchParams.set("response_type", "code");
 
   return NextResponse.redirect(authUrl.toString());
