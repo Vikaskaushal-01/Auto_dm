@@ -12,13 +12,6 @@ const INSTAGRAM_SCOPES = [
   "business_management",
 ].join(",");
 
-const INSTAGRAM_DIRECT_SCOPES = [
-  "instagram_business_basic",
-  "instagram_business_manage_messages",
-  "instagram_business_manage_comments",
-  "user_profile",
-].join(",");
-
 const FACEBOOK_SCOPES = [
   "pages_show_list",
   "pages_read_engagement",
@@ -34,7 +27,6 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const platform = searchParams.get("platform")?.toLowerCase() ?? "instagram";
-  const provider = searchParams.get("provider")?.toLowerCase();
   const isInstagram = platform === "instagram";
 
   const rawAppId = process.env.META_APP_ID;

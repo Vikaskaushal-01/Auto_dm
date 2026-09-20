@@ -65,7 +65,7 @@ export async function GET(request: Request) {
 
   try {
     // 0. Direct Instagram Login (for Instagram App IDs created via Instagram API)
-    if (authProvider === "instagram" || platform === "instagram") {
+    if (authProvider === "instagram") {
       const igBody = new URLSearchParams();
       igBody.append("client_id", appId);
       igBody.append("client_secret", appSecret);

@@ -14,7 +14,12 @@ export function getLiveBaseUrl(requestUrl?: string): string {
   }
 
   if (process.env.WEBHOOK_BASE_URL && !process.env.WEBHOOK_BASE_URL.includes("localhost")) {
-    return process.env.WEBHOOK_BASE_URL.replace(/\/$/, "");
+    try {
+      // Only the origin: a value like https://x.app/api/webhooks/meta must not be doubled up.
+      return new URL(process.env.WEBHOOK_BASE_URL.trim().replace(/^["']|["']$/g, "")).origin;
+    } catch {
+      // fall through to the other sources
+    }
   }
 
   if (requestUrl) {
