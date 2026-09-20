@@ -5,6 +5,7 @@ import {
   type Post,
 } from "@/lib/prisma";
 import { decryptToken } from "@/lib/security/encryption";
+import { INSTAGRAM_GRAPH_BASE, isInstagramLoginConnection } from "@/lib/instagram-config";
 import type {
   CommentDTO,
   ConnectionStatusDTO,
@@ -19,7 +20,17 @@ import type {
   SendDmResultDTO,
 } from "./types";
 
-const GRAPH_BASE = "https://graph.facebook.com/v21.0";
+const FACEBOOK_GRAPH_BASE = "https://graph.facebook.com/v21.0";
+
+/**
+ * Connections created through Instagram Login use graph.instagram.com and `me`;
+ * legacy Facebook-Login (Page token) connections use graph.facebook.com and the account id.
+ */
+function apiFor(connection: { scopes: string[] } | null | undefined, externalId: string) {
+  return isInstagramLoginConnection(connection?.scopes)
+    ? { base: INSTAGRAM_GRAPH_BASE, accountRef: "me" }
+    : { base: FACEBOOK_GRAPH_BASE, accountRef: externalId };
+}
 
 interface IGGraphMedia {
   id: string;
@@ -50,13 +61,18 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
     }
 
     const token = decryptToken(account.connection.accessToken);
-    return { account, token, externalId: account.externalAccountId };
+    return {
+      account,
+      token,
+      externalId: account.externalAccountId,
+      ...apiFor(account.connection, account.externalAccountId),
+    };
   }
 
   async getProfile(accountId: string): Promise<InstagramProfileDTO> {
     try {
-      const { account, token, externalId } = await this.getAccountAndToken(accountId);
-      const url = `${GRAPH_BASE}/${externalId}?fields=username,name,followers_count,follows_count,media_count,biography,website,profile_picture_url&access_token=${token}`;
+      const { account, token, base, accountRef } = await this.getAccountAndToken(accountId);
+      const url = `${base}/${accountRef}?fields=username,name,followers_count,follows_count,media_count,biography,website,profile_picture_url&access_token=${token}`;
       const res = await fetch(url);
 
       if (res.ok) {
@@ -143,8 +159,8 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
     opts?: { type?: PostTypeDTO; since?: Date },
   ): Promise<PostDTO[]> {
     try {
-      const { token, externalId } = await this.getAccountAndToken(accountId);
-      const url = `${GRAPH_BASE}/${externalId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&access_token=${token}&limit=50`;
+      const { token, base, accountRef } = await this.getAccountAndToken(accountId);
+      const url = `${base}/${accountRef}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&access_token=${token}&limit=50`;
       const res = await fetch(url);
 
       if (res.ok) {
@@ -215,7 +231,8 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
     if (post?.socialAccount.connection?.accessToken) {
       try {
         const token = decryptToken(post.socialAccount.connection.accessToken);
-        const url = `${GRAPH_BASE}/${post.externalId}/insights?metric=reach,saved,shares,comments,likes&access_token=${token}`;
+        const { base } = apiFor(post.socialAccount.connection, post.socialAccount.externalAccountId);
+        const url = `${base}/${post.externalId}/insights?metric=reach,saved,shares,comments,likes&access_token=${token}`;
         const res = await fetch(url);
         if (res.ok) {
           const json = await res.json();
@@ -271,7 +288,8 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
     if (post?.socialAccount.connection?.accessToken) {
       try {
         const token = decryptToken(post.socialAccount.connection.accessToken);
-        const url = `${GRAPH_BASE}/${post.externalId}/comments?fields=id,username,text,timestamp&access_token=${token}`;
+        const { base } = apiFor(post.socialAccount.connection, post.socialAccount.externalAccountId);
+        const url = `${base}/${post.externalId}/comments?fields=id,username,text,timestamp&access_token=${token}`;
         const res = await fetch(url);
         if (res.ok) {
           const json = await res.json();
@@ -307,15 +325,17 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
   }
 
   async sendDirectMessage(input: SendDmInput): Promise<SendDmResultDTO> {
-    const { token, externalId } = await this.getAccountAndToken(input.accountId);
+    const { token, base, accountRef } = await this.getAccountAndToken(input.accountId);
 
     // Meta Instagram Messaging API Send Endpoint
-    const sendUrl = `${GRAPH_BASE}/${externalId}/messages`;
+    const sendUrl = `${base}/${accountRef}/messages`;
     let dmSuccess = false;
 
     try {
+      // A comment-triggered DM must be a "private reply" addressed by comment_id; the API
+      // does not accept usernames as recipients.
       const bodyPayload: Record<string, unknown> = {
-        recipient: { username: input.toUsername },
+        recipient: input.commentId ? { comment_id: input.commentId } : { username: input.toUsername },
         message: { text: input.body },
       };
 
@@ -347,10 +367,19 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
       console.error("Meta sendDirectMessage exception:", err);
     }
 
+    // automationRun.commentId is a foreign key to our Comment table, while the id we get from
+    // webhooks is the platform's external comment id, so resolve it (or store null).
+    const storedComment = input.commentId
+      ? await prisma.comment.findFirst({
+          where: { OR: [{ id: input.commentId }, { externalId: input.commentId }] },
+          select: { id: true },
+        })
+      : null;
+
     const run = await prisma.automationRun.create({
       data: {
         automationId: input.automationId,
-        commentId: input.commentId ?? null,
+        commentId: storedComment?.id ?? null,
         status: dmSuccess ? "DM_SENT" : "DM_FAILED",
         dmSentAt: dmSuccess ? new Date() : null,
       },
@@ -379,7 +408,11 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
     }
 
     const token = decryptToken(comment.post.socialAccount.connection.accessToken);
-    const replyUrl = `${GRAPH_BASE}/${comment.externalId}/replies`;
+    const { base } = apiFor(
+      comment.post.socialAccount.connection,
+      comment.post.socialAccount.externalAccountId,
+    );
+    const replyUrl = `${base}/${comment.externalId}/replies`;
 
     try {
       const res = await fetch(replyUrl, {
@@ -402,8 +435,8 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
 
   async verifyConnection(accountId: string): Promise<ConnectionStatusDTO> {
     try {
-      const { externalId, token } = await this.getAccountAndToken(accountId);
-      const res = await fetch(`${GRAPH_BASE}/${externalId}?fields=id&access_token=${token}`);
+      const { accountRef, token, base } = await this.getAccountAndToken(accountId);
+      const res = await fetch(`${base}/${accountRef}?fields=id&access_token=${token}`);
       if (!res.ok) {
         const errJson = await res.json();
         return { ok: false, error: errJson.error?.message ?? "Token invalid or expired" };

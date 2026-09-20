@@ -1,16 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getMetaRedirectUri } from "@/lib/server-url";
-
-const INSTAGRAM_SCOPES = [
-  "pages_show_list",
-  "pages_read_engagement",
-  "pages_manage_metadata",
-  "instagram_basic",
-  "instagram_manage_comments",
-  "instagram_manage_messages",
-  "business_management",
-].join(",");
+import { getInstagramAppCredentials, INSTAGRAM_LOGIN_SCOPES } from "@/lib/instagram-config";
 
 const FACEBOOK_SCOPES = [
   "pages_show_list",
@@ -29,11 +20,16 @@ export async function GET(request: Request) {
   const platform = searchParams.get("platform")?.toLowerCase() ?? "instagram";
   const isInstagram = platform === "instagram";
 
-  const rawAppId = process.env.META_APP_ID;
-  const appId = rawAppId?.trim().replace(/^["']|["']$/g, "");
+  // Instagram uses Instagram Login (its own app id); Facebook Pages use Facebook Login (Meta app id)
+  const appId = isInstagram
+    ? getInstagramAppCredentials().appId
+    : process.env.META_APP_ID?.trim().replace(/^["']|["']$/g, "");
   if (!appId) {
     return NextResponse.redirect(
-      new URL("/settings/integrations?error=meta_app_id_missing", request.url),
+      new URL(
+        `/settings/integrations?error=${isInstagram ? "instagram_app_id_missing" : "meta_app_id_missing"}`,
+        request.url,
+      ),
     );
   }
 
@@ -44,18 +40,21 @@ export async function GET(request: Request) {
     workspaceId: session.workspaceId,
     userId: session.user.id,
     platform,
-    authProvider: "facebook",
+    authProvider: isInstagram ? "instagram" : "facebook",
     timestamp: Date.now(),
   };
   const state = Buffer.from(JSON.stringify(stateObj)).toString("base64url");
 
-  // Meta Graph API (Instagram Business & Facebook Pages) uses Facebook Login for Business dialog
-  const authUrl = new URL("https://www.facebook.com/v21.0/dialog/oauth");
+  const authUrl = new URL(
+    isInstagram
+      ? "https://www.instagram.com/oauth/authorize"
+      : "https://www.facebook.com/v21.0/dialog/oauth",
+  );
 
   authUrl.searchParams.set("client_id", appId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("state", state);
-  authUrl.searchParams.set("scope", isInstagram ? INSTAGRAM_SCOPES : FACEBOOK_SCOPES);
+  authUrl.searchParams.set("scope", isInstagram ? INSTAGRAM_LOGIN_SCOPES.join(",") : FACEBOOK_SCOPES);
   authUrl.searchParams.set("response_type", "code");
 
   return NextResponse.redirect(authUrl.toString());

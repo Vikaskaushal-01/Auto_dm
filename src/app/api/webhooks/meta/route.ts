@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { processIncomingComment } from "@/lib/automations/engine";
+import { getInstagramAppCredentials } from "@/lib/instagram-config";
 
 interface WebhookEntryChange {
   field?: string;
@@ -54,23 +55,24 @@ export async function GET(request: Request) {
  * Verifies the Meta HMAC-SHA256 signature against the raw request body.
  */
 function verifySignature(rawBody: string, signatureHeader: string | null): boolean {
-  const secret = process.env.META_APP_SECRET;
-  if (!secret) return true; // if secret is not configured in dev, skip
+  // Instagram-Login webhooks are signed with the Instagram app secret, others with the Meta app secret
+  const secrets = [process.env.META_APP_SECRET, getInstagramAppCredentials().appSecret]
+    .map((v) => v?.trim().replace(/^["']|["']$/g, ""))
+    .filter((v): v is string => !!v);
+  if (secrets.length === 0) return true; // if no secret is configured in dev, skip
   if (!signatureHeader) return false;
 
-  const parts = signatureHeader.split("sha256=");
-  const expectedHash = parts[1];
+  const expectedHash = signatureHeader.split("sha256=")[1];
   if (!expectedHash) return false;
 
-  const hmac = createHmac("sha256", secret);
-  hmac.update(rawBody);
-  const calculatedHash = hmac.digest("hex");
-
-  try {
-    return timingSafeEqual(Buffer.from(expectedHash, "hex"), Buffer.from(calculatedHash, "hex"));
-  } catch {
-    return false;
-  }
+  return secrets.some((secret) => {
+    const calculatedHash = createHmac("sha256", secret).update(rawBody).digest("hex");
+    try {
+      return timingSafeEqual(Buffer.from(expectedHash, "hex"), Buffer.from(calculatedHash, "hex"));
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -113,20 +115,26 @@ export async function POST(request: Request) {
             const author = commentValue.from?.username ?? "unknown";
             const mediaId = commentValue.media?.id;
 
-            // Find matching connected SocialAccount
+            // Find matching connected SocialAccount (webhook id is the professional account id)
             const account = await prisma.socialAccount.findFirst({
               where: {
                 platform: "INSTAGRAM",
-                externalAccountId,
+                OR: [{ externalAccountId }, { connection: { metaAppUserId: externalAccountId } }],
               },
             });
 
-            if (account) {
+            // Ignore the account's own comments (e.g. our automated public replies) to avoid loops
+            const isOwnComment =
+              !!account &&
+              (commentValue.from?.id === externalAccountId ||
+                commentValue.from?.username === account.username);
+
+            if (account && !isOwnComment) {
               await processIncomingComment({
                 workspaceId: account.workspaceId,
                 socialAccountId: account.id,
                 platform: "INSTAGRAM",
-                postId: mediaId,
+                postId: mediaId ? `ig_${mediaId}` : undefined, // matches Post.id used by the connector
                 commentId,
                 commentText: text,
                 authorUsername: author,

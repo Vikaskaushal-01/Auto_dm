@@ -2,11 +2,38 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encryptToken } from "@/lib/security/encryption";
 import { getMetaRedirectUri } from "@/lib/server-url";
+import {
+  getInstagramAppCredentials,
+  INSTAGRAM_GRAPH_BASE,
+  INSTAGRAM_LOGIN_SCOPES,
+} from "@/lib/instagram-config";
 
 interface OAuthTokenResponse {
   access_token: string;
   token_type: string;
   expires_in?: number;
+}
+
+interface IgTokenResponse {
+  access_token?: string;
+  user_id?: string | number;
+  permissions?: string[];
+  error_type?: string;
+  code?: number;
+  error_message?: string;
+}
+
+interface IgMeResponse {
+  id?: string;
+  user_id?: string | number;
+  username?: string;
+  name?: string;
+  profile_picture_url?: string;
+  followers_count?: number;
+  follows_count?: number;
+  media_count?: number;
+  biography?: string;
+  website?: string;
 }
 
 interface PageAccountItem {
@@ -50,21 +77,29 @@ export async function GET(request: Request) {
   }
 
   const { workspaceId, platform, authProvider } = stateData;
-  const rawAppId = process.env.META_APP_ID;
-  const rawAppSecret = process.env.META_APP_SECRET;
-  const appId = rawAppId?.trim().replace(/^["']|["']$/g, "");
-  const appSecret = rawAppSecret?.trim().replace(/^["']|["']$/g, "");
+  const { appId, appSecret } =
+    authProvider === "instagram"
+      ? getInstagramAppCredentials()
+      : {
+          appId: process.env.META_APP_ID?.trim().replace(/^["']|["']$/g, ""),
+          appSecret: process.env.META_APP_SECRET?.trim().replace(/^["']|["']$/g, ""),
+        };
   const redirectUri = getMetaRedirectUri(request.url);
 
   if (!appId || !appSecret) {
-    baseUrl.searchParams.set("error", "meta_credentials_missing_in_server");
+    baseUrl.searchParams.set(
+      "error",
+      authProvider === "instagram"
+        ? "instagram_credentials_missing_in_server"
+        : "meta_credentials_missing_in_server",
+    );
     return NextResponse.redirect(baseUrl);
   }
 
   const cleanCode = code.replace(/#_$/, "");
 
   try {
-    // 0. Direct Instagram Login (for Instagram App IDs created via Instagram API)
+    // 0. Instagram Login (Instagram API with Instagram Login)
     if (authProvider === "instagram") {
       const igBody = new URLSearchParams();
       igBody.append("client_id", appId);
@@ -78,22 +113,22 @@ export async function GET(request: Request) {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: igBody.toString(),
       });
-      const igTokenJson = (await igTokenRes.json()) as {
-        access_token?: string;
-        user_id?: string | number;
-        permissions?: string[];
-        error_type?: string;
-        code?: number;
-        error_message?: string;
-      };
+      const igTokenRaw = (await igTokenRes.json()) as IgTokenResponse & { data?: IgTokenResponse[] };
+      // Some API versions wrap the payload in { data: [ ... ] }
+      const igTokenJson: IgTokenResponse = igTokenRaw.data?.[0] ?? igTokenRaw;
 
       if (igTokenRes.ok && igTokenJson.access_token) {
         const shortLivedToken = igTokenJson.access_token;
         const igUserId = String(igTokenJson.user_id);
+        const grantedScopes = Array.isArray(igTokenJson.permissions)
+          ? igTokenJson.permissions
+          : typeof igTokenJson.permissions === "string"
+            ? (igTokenJson.permissions as string).split(",")
+            : INSTAGRAM_LOGIN_SCOPES;
 
         // Exchange for 60-day long-lived token
         let igAccessToken = shortLivedToken;
-        let tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+        let tokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // short-lived: 1h
 
         try {
           const longLivedUrl = new URL("https://graph.instagram.com/access_token");
@@ -109,34 +144,49 @@ export async function GET(request: Request) {
               const expSec = longLivedJson.expires_in ?? 60 * 24 * 60 * 60;
               tokenExpiresAt = new Date(Date.now() + expSec * 1000);
             }
+          } else {
+            console.warn("IG long-lived token exchange failed:", await longLivedRes.text());
           }
         } catch (llErr) {
           console.warn("Failed to exchange for long-lived IG token:", llErr);
         }
 
-        // Fetch user profile from Instagram Graph API
-        let username = `instagram_${igUserId}`;
-        let displayName = `Instagram User`;
-        let avatarUrl: string | null = null;
-
-        try {
-          const meUrl = `https://graph.instagram.com/v21.0/me?fields=id,username,name,profile_picture_url&access_token=${igAccessToken}`;
-          const meRes = await fetch(meUrl);
-          if (meRes.ok) {
-            const meData = (await meRes.json()) as {
-              id?: string;
-              username?: string;
-              name?: string;
-              profile_picture_url?: string;
-            };
-            if (meData.username) username = meData.username;
-            if (meData.name) displayName = meData.name;
-            else if (meData.username) displayName = meData.username;
-            if (meData.profile_picture_url) avatarUrl = meData.profile_picture_url;
+        // Fetch the professional account profile. Fall back to a minimal field set if
+        // any field in the full list is rejected (a bad field fails the whole request).
+        const igAuth = { Authorization: `Bearer ${igAccessToken}` };
+        let me: IgMeResponse | null = null;
+        for (const fields of [
+          "user_id,username,name,profile_picture_url,followers_count,follows_count,media_count,biography,website",
+          "user_id,username,name,profile_picture_url,followers_count,follows_count,media_count",
+          "id,username",
+        ]) {
+          try {
+            const meRes = await fetch(`${INSTAGRAM_GRAPH_BASE}/me?fields=${fields}`, { headers: igAuth });
+            if (meRes.ok) {
+              me = (await meRes.json()) as IgMeResponse;
+              break;
+            }
+            console.warn("IG /me failed for fields", fields, await meRes.text());
+          } catch (meErr) {
+            console.warn("Failed to fetch IG profile details:", meErr);
           }
-        } catch (meErr) {
-          console.warn("Failed to fetch IG profile details:", meErr);
         }
+
+        if (!me?.username) {
+          baseUrl.searchParams.set(
+            "error",
+            encodeURIComponent(
+              "Instagram login succeeded but the account profile could not be read. Make sure this is an Instagram Professional (Business/Creator) account.",
+            ),
+          );
+          return NextResponse.redirect(baseUrl);
+        }
+
+        // Webhooks and Graph calls identify the professional account by `user_id`
+        const professionalId = me.user_id ? String(me.user_id) : igUserId;
+        const username = me.username;
+        const displayName = me.name || me.username;
+        const avatarUrl = me.profile_picture_url ?? null;
 
         const encryptedToken = encryptToken(igAccessToken);
 
@@ -144,73 +194,82 @@ export async function GET(request: Request) {
           where: { workspaceId, platform: "INSTAGRAM" },
         });
 
+        const accountData = {
+          externalAccountId: professionalId,
+          username,
+          displayName,
+          avatarUrl,
+          status: "CONNECTED" as const,
+          isDemo: false,
+        };
         const socialAccount = existingAccount
-          ? await prisma.socialAccount.update({
-              where: { id: existingAccount.id },
-              data: {
-                externalAccountId: igUserId,
-                username,
-                displayName,
-                avatarUrl,
-                status: "CONNECTED",
-                isDemo: false,
-              },
-            })
+          ? await prisma.socialAccount.update({ where: { id: existingAccount.id }, data: accountData })
           : await prisma.socialAccount.create({
-              data: {
-                workspaceId,
-                platform: "INSTAGRAM",
-                externalAccountId: igUserId,
-                username,
-                displayName,
-                avatarUrl,
-                status: "CONNECTED",
-                isDemo: false,
-              },
+              data: { workspaceId, platform: "INSTAGRAM", ...accountData },
             });
 
+        // Subscribe this account to webhooks so comments trigger automations in real time
+        let webhookError: string | null = null;
+        try {
+          const subRes = await fetch(
+            `${INSTAGRAM_GRAPH_BASE}/me/subscribed_apps?subscribed_fields=comments,messages`,
+            { method: "POST", headers: igAuth },
+          );
+          if (!subRes.ok) {
+            webhookError = `Webhook subscription failed: ${await subRes.text()}`;
+            console.warn(webhookError);
+          }
+        } catch (subErr) {
+          webhookError = `Webhook subscription failed: ${subErr instanceof Error ? subErr.message : String(subErr)}`;
+          console.warn(webhookError);
+        }
+
+        const connectionData = {
+          mode: "LIVE" as const,
+          accessToken: encryptedToken,
+          tokenExpiresAt,
+          scopes: grantedScopes,
+          metaAppUserId: igUserId,
+          lastSyncedAt: new Date(),
+          lastSyncStatus: "SUCCESS" as const,
+          lastErrorMessage: webhookError,
+        };
         await prisma.platformConnection.upsert({
           where: { socialAccountId: socialAccount.id },
+          update: connectionData,
+          create: { socialAccountId: socialAccount.id, ...connectionData },
+        });
+
+        await prisma.profile.upsert({
+          where: { socialAccountId: socialAccount.id },
           update: {
-            mode: "LIVE",
-            accessToken: encryptedToken,
-            tokenExpiresAt,
-            scopes: igTokenJson.permissions ?? [
-              "instagram_business_basic",
-              "instagram_business_manage_messages",
-              "instagram_business_manage_comments",
-            ],
-            metaAppUserId: igUserId,
-            lastSyncedAt: new Date(),
-            lastSyncStatus: "SUCCESS",
-            lastErrorMessage: null,
+            followersCount: me.followers_count ?? 0,
+            followingCount: me.follows_count ?? 0,
+            mediaCount: me.media_count ?? 0,
+            bio: me.biography ?? null,
+            website: me.website ?? null,
+            asOf: new Date(),
           },
           create: {
             socialAccountId: socialAccount.id,
-            mode: "LIVE",
-            accessToken: encryptedToken,
-            tokenExpiresAt,
-            scopes: igTokenJson.permissions ?? [
-              "instagram_business_basic",
-              "instagram_business_manage_messages",
-              "instagram_business_manage_comments",
-            ],
-            metaAppUserId: igUserId,
-            lastSyncedAt: new Date(),
-            lastSyncStatus: "SUCCESS",
+            followersCount: me.followers_count ?? 0,
+            followingCount: me.follows_count ?? 0,
+            mediaCount: me.media_count ?? 0,
+            bio: me.biography ?? null,
+            website: me.website ?? null,
           },
         });
 
         baseUrl.searchParams.set("success", "instagram_connected");
         return NextResponse.redirect(baseUrl);
-      } else if (authProvider === "instagram") {
-        console.error("Instagram direct token exchange failed:", igTokenJson);
-        baseUrl.searchParams.set(
-          "error",
-          encodeURIComponent(igTokenJson.error_message ?? "instagram_token_exchange_failed"),
-        );
-        return NextResponse.redirect(baseUrl);
       }
+
+      console.error("Instagram token exchange failed:", igTokenJson);
+      baseUrl.searchParams.set(
+        "error",
+        encodeURIComponent(igTokenJson.error_message ?? "instagram_token_exchange_failed"),
+      );
+      return NextResponse.redirect(baseUrl);
     }
 
     // 1. Facebook Login for Business: Exchange auth code for short-lived user access token
