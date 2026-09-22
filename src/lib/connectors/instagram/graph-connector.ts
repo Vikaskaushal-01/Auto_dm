@@ -232,7 +232,11 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
       try {
         const token = decryptToken(post.socialAccount.connection.accessToken);
         const { base } = apiFor(post.socialAccount.connection, post.socialAccount.externalAccountId);
-        const url = `${base}/${post.externalId}/insights?metric=reach,saved,shares,comments,likes&access_token=${token}`;
+        // "views" is only a valid metric for video/reel media; requesting it for
+        // images makes the whole call fail, so it's added conditionally.
+        const metricList =
+          post.type === "REEL" ? "views,reach,saved,shares,comments,likes" : "reach,saved,shares,comments,likes";
+        const url = `${base}/${post.externalId}/insights?metric=${metricList}&access_token=${token}`;
         const res = await fetch(url);
         if (res.ok) {
           const json = await res.json();
@@ -240,17 +244,30 @@ export class GraphAPIInstagramConnector implements InstagramConnector {
           for (const item of json.data ?? []) {
             metricsMap[item.name] = item.values?.[0]?.value ?? 0;
           }
+          const reach = metricsMap["reach"] ?? 0;
+          const likes = metricsMap["likes"] ?? 0;
+          const comments = metricsMap["comments"] ?? 0;
+          const shares = metricsMap["shares"] ?? 0;
+          const saves = metricsMap["saved"] ?? 0;
+          // Meta's Graph API no longer exposes a separate "impressions" metric for
+          // most media (deprecated in favor of reach); "views" only exists for video.
+          const views = metricsMap["views"] ?? reach;
+          const engagementRate =
+            reach > 0 ? Number((((likes + comments + shares + saves) / reach) * 100).toFixed(1)) : 0;
+
           return {
             postId,
-            views: metricsMap["reach"] ?? 0,
-            reach: metricsMap["reach"] ?? 0,
-            impressions: metricsMap["reach"] ?? 0,
-            likes: metricsMap["likes"] ?? 0,
-            comments: metricsMap["comments"] ?? 0,
-            shares: metricsMap["shares"] ?? 0,
-            saves: metricsMap["saved"] ?? 0,
+            views,
+            reach,
+            impressions: reach,
+            likes,
+            comments,
+            shares,
+            saves,
+            // Not returned by this insights call — Meta requires a separate,
+            // higher-privilege metric for these; left honestly at 0 rather than guessed.
             watchTimeSeconds: 0,
-            engagementRate: 0,
+            engagementRate,
             profileVisits: 0,
             followersGained: 0,
             linkClicks: 0,
